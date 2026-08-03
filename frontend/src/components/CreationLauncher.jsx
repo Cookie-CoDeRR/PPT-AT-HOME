@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import {
-  Sparkles, Loader2, FileText, CheckCircle, ChevronDown,
+  Sparkles, Loader2, FileText, CheckCircle, ChevronDown, ChevronUp, ArrowRight,
   Monitor, Shuffle, Plus, Paperclip, Camera, Globe, LayoutTemplate,
   Share2, Image as ImageIcon, BarChart2, ArrowLeft
 } from 'lucide-react';
@@ -42,6 +42,18 @@ const GRAPHIC_STYLES = [
 const GRAPHIC_ASPECTS = ['1:1', '16:9', '9:16', '4:3'];
 const GRAPHIC_COUNTS = [1, 2, 3, 4];
 const GRAPHIC_QUALITIES = ['Standard', 'HD'];
+
+const GRAPHIC_TEMPLATES = [
+  { label: 'Infographic', desc: 'Data visuals and charts', img: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=200&h=200&fit=crop' },
+  { label: 'Poster', desc: 'Promotional and event posters', img: 'https://images.unsplash.com/photo-1542315183-d343468087bd?w=200&h=200&fit=crop' },
+  { label: 'Team Structure', desc: 'Org charts and team pages', img: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=200&h=200&fit=crop' },
+  { label: 'Invite', desc: 'Invitations and save-the-dates', img: 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=200&h=200&fit=crop' },
+  { label: 'Calendar & Schedule', desc: 'Calendars and timelines', img: 'https://images.unsplash.com/photo-1506784983877-45594efa4cbe?w=200&h=200&fit=crop' },
+  { label: 'Diagram', desc: 'Flowcharts and process diagrams', img: 'https://images.unsplash.com/photo-1603791440384-56cd371ee9a7?w=200&h=200&fit=crop' },
+  { label: 'Logo', desc: 'Brand marks and symbols', img: 'https://images.unsplash.com/photo-1626785774573-4b799315345d?w=200&h=200&fit=crop' },
+  { label: 'Social Media Post', desc: 'Content for social platforms', img: 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=200&h=200&fit=crop' },
+  { label: 'Something else', desc: 'Describe anything you want', img: 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=200&h=200&fit=crop' }
+];
 
 const PPT_PROMPTS = [
   { icon: '📈', text: 'Marketing psychology hacks that feel illegal (but aren\'t)' },
@@ -598,20 +610,62 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
             </button>
           </div>
 
-          <div className="w-full flex items-center gap-4 mb-6 opacity-60">
+          <div className="w-full flex items-center gap-4 mb-6 opacity-60 mt-10">
             <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent to-white/20" />
             <span className="text-xs text-gray-400">Or, start with a template</span>
             <div className="h-[1px] flex-1 bg-gradient-to-l from-transparent to-white/20" />
           </div>
 
-          <div className="w-full rounded-xl border border-white/10 bg-white/5 overflow-hidden cursor-pointer hover:bg-white/10 transition-colors">
-            <div className="p-4 flex items-center justify-between">
+          {/* Step 1: Open */}
+          <div className="w-full rounded-xl border border-white/10 bg-white/5 overflow-hidden mb-3">
+            <div className="p-4 pb-2 flex items-center justify-between cursor-pointer">
               <div className="flex items-center gap-3">
                 <div className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-bold">1</div>
                 <span className="text-sm font-medium text-gray-200">What do you want to design?</span>
               </div>
-              <ChevronDown className="w-4 h-4 text-gray-500" />
+              <ChevronUp className="w-4 h-4 text-gray-500" />
             </div>
+            
+            <div className="p-4 pt-2 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              {GRAPHIC_TEMPLATES.map((tpl, i) => (
+                <div key={i} className="group cursor-pointer">
+                  <div className="w-full aspect-square rounded-lg overflow-hidden border border-white/10 group-hover:border-blue-500/50 mb-2 transition-colors">
+                    <img src={tpl.img} alt={tpl.label} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  </div>
+                  <h4 className="text-[13px] font-medium text-gray-200 group-hover:text-blue-400 transition-colors">{tpl.label}</h4>
+                  <p className="text-[11px] text-gray-500 leading-tight mt-0.5">{tpl.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Step 2: Closed */}
+          <div className="w-full rounded-xl border border-white/10 bg-white/5 overflow-hidden mb-3 opacity-60">
+            <div className="p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 rounded-full bg-white/10 text-gray-400 flex items-center justify-center text-xs font-bold">2</div>
+                <span className="text-sm font-medium text-gray-400">Pick a layout</span>
+              </div>
+              <ChevronDown className="w-4 h-4 text-gray-600" />
+            </div>
+          </div>
+
+          {/* Step 3: Closed */}
+          <div className="w-full rounded-xl border border-white/10 bg-white/5 overflow-hidden mb-8 opacity-60">
+            <div className="p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 rounded-full bg-white/10 text-gray-400 flex items-center justify-center text-xs font-bold">3</div>
+                <span className="text-sm font-medium text-gray-400">Theme & prompt</span>
+              </div>
+              <ChevronDown className="w-4 h-4 text-gray-600" />
+            </div>
+          </div>
+
+          {/* Start Blank */}
+          <div className="flex justify-center mb-8">
+            <button className="flex items-center gap-1.5 text-sm text-blue-500 font-medium hover:text-blue-400 transition-colors">
+              Start a new blank design <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
 
         </motion.div>
