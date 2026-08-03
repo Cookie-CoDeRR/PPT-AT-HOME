@@ -13,7 +13,7 @@ import axios from 'axios';
 const CONTENT_TYPES = [
   { id: 'presentation', label: 'Presentation', icon: LayoutTemplate },
   { id: 'webpage',      label: 'Webpage',       icon: Globe },
-  { id: 'document',     label: 'Document',       icon: FileText,       soon: true },
+  { id: 'document',     label: 'Document',       icon: FileText },
   { id: 'social',       label: 'Social',         icon: Share2,         soon: true },
   { id: 'graphic',      label: 'Graphic',        icon: ImageIcon,      badge: 'NEW', soon: true },
 ];
@@ -21,6 +21,7 @@ const CONTENT_TYPES = [
 const SLIDE_COUNTS = [5, 8, 10, 12, 15];
 const SECTION_COUNTS = [3, 5, 8, 10, 12];
 const LANGUAGES = ['English (UK)', 'English (US)', 'Spanish', 'French', 'German'];
+const DOCUMENT_SIZES = ['Default', 'A4', 'US Letter'];
 
 const THEMES = ['Modern Dark Tech', 'Classic', 'Editorial Serif', 'Vibrant Startup', 'Corporate Pro', 'Elegant Dark'];
 const ORIENTATIONS = [
@@ -54,6 +55,17 @@ const WEBPAGE_PROMPTS = [
   { icon: '📱', text: 'Landing page for a mobile app that helps users learn a new language' },
   { icon: '🏢', text: 'Corporate homepage for a B2B SaaS startup' },
   { icon: '🍕', text: 'Website for a local artisan pizzeria' },
+];
+
+const DOCUMENT_PROMPTS = [
+  { icon: '◮', text: 'Exploring different types of rocks' },
+  { icon: '🪙', text: 'Investment prospectus for a new cryptocurrency ICO, gamma coin' },
+  { icon: '🔨', text: 'Statement of work for a building contractor working on Willie Wonka\'s factory' },
+  { icon: '🏀', text: 'Historic basketball games' },
+  { icon: '🏙️', text: 'Potrero Hill, San Francisco' },
+  { icon: '🐈', text: 'Buzzfeed-style article: \'10 Weird Facts About Cats\'' },
+  { icon: '📝', text: 'Employee onboarding handbook for a remote-first startup' },
+  { icon: '📊', text: 'Q3 Financial performance report and Q4 forecast' },
 ];
 
 function getRandomSix(pool) {
@@ -115,13 +127,20 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
   const [orientation, setOrientation] = useState('LAYOUT_16x9');
   const [tone, setTone] = useState('Professional/Corporate');
   const [language, setLanguage] = useState('English (UK)');
+  const [docSize, setDocSize] = useState('Default');
   
-  const currentPromptsPool = contentType === 'webpage' ? WEBPAGE_PROMPTS : PPT_PROMPTS;
+  const getPromptsPool = (type) => {
+    if (type === 'webpage') return WEBPAGE_PROMPTS;
+    if (type === 'document') return DOCUMENT_PROMPTS;
+    return PPT_PROMPTS;
+  };
+  
+  const currentPromptsPool = getPromptsPool(contentType);
   const [examplePrompts, setExamplePrompts] = useState(() => getRandomSix(currentPromptsPool));
 
   // Update prompts when content type changes
   useEffect(() => {
-    setExamplePrompts(getRandomSix(contentType === 'webpage' ? WEBPAGE_PROMPTS : PPT_PROMPTS));
+    setExamplePrompts(getRandomSix(getPromptsPool(contentType)));
   }, [contentType]);
 
   const [activeModel, setActiveModel] = useState('deepseek-coder-v2-lite-instruct-mlx');
@@ -193,8 +212,8 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
       templateType: 'default',
       density: 'Detailed',
       includeImages: true,
-      slideSize: orientation,
-      language: contentType === 'webpage' ? language : undefined,
+      slideSize: contentType === 'presentation' ? orientation : (contentType === 'document' ? docSize : undefined),
+      language: (contentType === 'webpage' || contentType === 'document') ? language : undefined,
       referenceImage: referenceImage?.data,
       model: activeModel,
       temperature: 0.6,
@@ -299,13 +318,33 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
               onChange={setTone}
             />
           </>
-        ) : (
+        ) : contentType === 'webpage' ? (
           <>
             <PillDropdown
               label="Sections"
               value={slideCount}
               options={SECTION_COUNTS}
               onChange={v => setSlideCount(Number(v))}
+            />
+            <PillDropdown
+              value={language}
+              options={LANGUAGES}
+              onChange={setLanguage}
+            />
+          </>
+        ) : (
+          // Document
+          <>
+            <PillDropdown
+              label="Sections"
+              value={slideCount}
+              options={SECTION_COUNTS}
+              onChange={v => setSlideCount(Number(v))}
+            />
+            <PillDropdown
+              value={docSize}
+              options={DOCUMENT_SIZES}
+              onChange={setDocSize}
             />
             <PillDropdown
               value={language}

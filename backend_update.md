@@ -1,8 +1,8 @@
-# Backend Update: Webpage Generation Support
+# Backend Update: Webpage & Document Generation Support
 
-> **For Backend Engineers:** The frontend has been updated to support a new **Webpage** generation mode (previously only Presentation was supported). The `CreationLauncher` now passes new fields in the `POST /api/generate-json` request when `contentType === 'webpage'`.
+> **For Backend Engineers:** The frontend has been updated to support two new generation modes: **Webpage** and **Document** (previously only Presentation was supported). The `CreationLauncher` now passes new fields in the `POST /api/generate-json` request when `contentType === 'webpage'` or `contentType === 'document'`.
 
-Please update the backend API to handle this new content type.
+Please update the backend API to handle these new content types.
 
 ---
 
@@ -10,32 +10,33 @@ Please update the backend API to handle this new content type.
 
 ### New Request Payload
 
-When the user selects **Webpage**, the payload will look like this:
+When the user selects **Webpage** or **Document**, the payload will look like this:
 
 ```json
 {
   "prompt": "Landing page for a healthcare consultant...",
-  "contentType": "webpage",           // NEW: 'presentation' or 'webpage'
-  "slideCount": 10,                   // Represents "Sections" instead of slides for webpages
-  "language": "English (UK)",         // NEW: Only present if contentType === 'webpage'
+  "contentType": "webpage",           // NEW: 'presentation', 'webpage', or 'document'
+  "slideCount": 10,                   // Represents "Sections" instead of slides
+  "language": "English (UK)",         // NEW: Present if contentType is 'webpage' or 'document'
+  "slideSize": "Default",             // NEW: Present for 'document' mode ('Default', 'A4', 'US Letter')
   "model": "deepseek-coder-v2-lite-instruct-mlx",
   "temperature": 0.6,
   "baseUrl": "http://127.0.0.1:1234/v1"
-  // Note: theme, tone, slideSize will be missing/default for webpages
 }
 ```
 
 ### Action Required:
 1. Update `backend/server.js` or `backend/services/llmService.js` to accept `contentType` and `language`.
-2. If `contentType === 'webpage'`, the LLM system prompt should be adjusted to generate a single continuous JSON object representing a webpage (e.g. hero section, features, testimonials, footer) rather than discrete PowerPoint slides.
-3. The LLM response should still conform to a format the frontend can render (the frontend currently expects a `slides` array for rendering in the workspace). You may need to map "webpage sections" into the existing `slides_json` structure temporarily, or we need to align on a new JSON schema for webpages.
+2. If `contentType === 'webpage'`, adjust the LLM system prompt to generate a single continuous JSON object representing a webpage (e.g. hero section, features, footer).
+3. If `contentType === 'document'`, adjust the LLM system prompt to generate a document structure (e.g. headers, paragraphs, lists) rather than presentation slides. Note that `slideSize` will pass values like "Default", "A4", or "US Letter" for documents.
+4. The LLM response should still conform to a format the frontend can render in the workspace. You may need to map these "sections" into the existing `slides_json` structure temporarily.
 
 ---
 
 ## 2. API Changes: `POST /api/generate-incremental`
 
 ### Action Required:
-If the user is in a Webpage workspace and asks the AI to edit it, the backend should be aware of the `contentType` to maintain the webpage structure rather than breaking it into slides.
+If the user is in a Webpage or Document workspace and asks the AI to edit it, the backend should be aware of the `contentType` to maintain the correct structural flow rather than breaking it into presentation slides.
 
 ---
 
@@ -44,7 +45,7 @@ If the user is in a Webpage workspace and asks the AI to edit it, the backend sh
 Currently, the frontend's `Workspace.jsx` and the backend's Python exporter (`export_pptx.py`) are hardcoded for PowerPoint presentations. 
 
 We need to discuss:
-- **Exporting:** How should a generated webpage be exported? (e.g., download as HTML/CSS/JS zip, deploy to Vercel/Netlify, or just export a long static image?)
-- **Workspace UI:** The frontend currently renders "slides". If the backend returns `slides: [{ type: 'hero' }, { type: 'features' }]`, the frontend will still render them as discrete slides. A future frontend PR will introduce a continuous scrolling `WebpageWorkspace.jsx`.
+- **Exporting:** How should a generated webpage be exported? (e.g., download as HTML/CSS/JS zip, deploy to Vercel?) How should a document be exported? (e.g., download as PDF/DOCX?)
+- **Workspace UI:** The frontend currently renders discrete "slides". A future frontend PR will introduce continuous scrolling views for Webpages and Documents (`WebpageWorkspace.jsx`, `DocumentWorkspace.jsx`).
 
-For now, the priority is updating the LLM prompts in `/api/generate-json` to support `contentType === 'webpage'`.
+For now, the priority is updating the LLM prompts in `/api/generate-json` to support `contentType === 'webpage'` and `contentType === 'document'`.
