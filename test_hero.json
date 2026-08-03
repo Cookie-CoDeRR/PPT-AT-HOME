@@ -1,0 +1,20 @@
+{
+  "theme": {
+    "bkgd": "0B0F19",
+    "titleColor": "FFFFFF",
+    "textColor": "A0A8BE",
+    "accent": "3B82F6"
+  },
+  "slideSize": "LAYOUT_16x9",
+  "slides": [
+    {
+      "slide_type": "title_hero",
+      "title": "Decoding Gen Z: Modern Marketing",
+      "subtitle": "Stop Talking At Them. Start Talking With Them.",
+      "bullets": [
+        "Content pending",
+        "Please update in editor"
+      ]
+    }
+  ]
+}

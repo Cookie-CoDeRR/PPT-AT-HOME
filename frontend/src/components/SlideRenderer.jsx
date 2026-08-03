@@ -9,6 +9,9 @@ import BarChartLayout from './layouts/BarChartLayout';
 import DataTableLayout from './layouts/DataTableLayout';
 import BentoGridLayout from './layouts/BentoGridLayout';
 import MetricDashboardLayout from './layouts/MetricDashboardLayout';
+import TitleSlideLayout from './layouts/TitleSlideLayout';
+import TwoColumnLayout from './layouts/TwoColumnLayout';
+import ThreeCardGrid from './layouts/ThreeCardGrid';
 
 export default function SlideRenderer({ slide, slideSize }) {
   if (!slide) return null;
@@ -23,6 +26,16 @@ export default function SlideRenderer({ slide, slideSize }) {
 
   let layoutComponent;
   switch (type) {
+    case 'title_hero':
+      layoutComponent = <TitleSlideLayout slide={slide} />;
+      break;
+    case 'two_column_image':
+    case 'hero_split':
+      layoutComponent = <TwoColumnLayout slide={slide} />;
+      break;
+    case 'three_card_grid':
+      layoutComponent = <ThreeCardGrid slide={slide} />;
+      break;
     case 'comparison':
       layoutComponent = <ComparisonLayout slide={slide} />;
       break;
@@ -30,6 +43,7 @@ export default function SlideRenderer({ slide, slideSize }) {
       layoutComponent = <TimelineLayout slide={slide} />;
       break;
     case 'stat_callout':
+    case 'stat_or_quote':
       layoutComponent = <StatCalloutLayout slide={slide} />;
       break;
     case 'grid_list':
@@ -50,14 +64,14 @@ export default function SlideRenderer({ slide, slideSize }) {
     case 'metric_dashboard':
       layoutComponent = <MetricDashboardLayout slide={slide} />;
       break;
+    case 'standard_text':
+    case 'summary_takeaways':
     case 'default':
     default:
       layoutComponent = <DefaultLayout slide={slide} />;
       break;
   }
 
-  // We rely on Workspace.jsx assigning the dynamic background color class, 
-  // but we enforce the dimensions here
   return (
     <div className={containerStyle}>
        {layoutComponent}

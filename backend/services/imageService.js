@@ -34,7 +34,8 @@ async function saveImageLocally(base64Data) {
     }
     const filename = `img_${crypto.randomBytes(4).toString('hex')}.png`;
     const filePath = path.join(assetsDir, filename);
-    fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+    const cleanData = typeof base64Data === 'string' ? base64Data.replace(/^data:image\/\w+;base64,/, '') : base64Data;
+    fs.writeFileSync(filePath, Buffer.from(cleanData, 'base64'));
     return `/assets/${filename}`;
 }
 
@@ -120,8 +121,10 @@ async function generateImageComfyUI(prompt, width, height) {
         
         if (!history[promptId]) throw new Error("ComfyUI generation timeout");
         
-        const outputs = history[promptId].outputs;
+        const outputs = history[promptId]?.outputs;
+        if (!outputs || Object.keys(outputs).length === 0) throw new Error("No output nodes returned from ComfyUI.");
         const outputNode = outputs[Object.keys(outputs)[0]];
+        if (!outputNode?.images?.[0]?.filename) throw new Error("No output image file returned from ComfyUI.");
         const filename = outputNode.images[0].filename;
         
         const imageRes = await axios.get(`${baseUrl}/view?filename=${filename}`, { responseType: 'arraybuffer', timeout: 10000 });

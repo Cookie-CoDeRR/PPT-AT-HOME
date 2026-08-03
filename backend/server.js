@@ -300,32 +300,45 @@ app.post('/api/export/drive', upload.single('template'), async (req, res) => {
         }
 
         const { slides, title, theme, templateType, slideSize, cloudTemplateUrl, customTheme, customBackground } = req.body;
-        const slidesJson = JSON.parse(slides);
+        let slidesJson;
+        try {
+            slidesJson = typeof slides === 'string' ? JSON.parse(slides) : slides;
+        } catch (e) {
+            return res.status(400).json({ error: "Invalid slides data" });
+        }
         
         let customThemeObj = null;
         if (customTheme) {
-            try { customThemeObj = JSON.parse(customTheme); } catch(e){}
+            try { customThemeObj = typeof customTheme === 'string' ? JSON.parse(customTheme) : customTheme; } catch(e){}
         }
         
         let customBgObj = null;
         if (customBackground) {
-            try { customBgObj = JSON.parse(customBackground); } catch(e){}
+            try { customBgObj = typeof customBackground === 'string' ? JSON.parse(customBackground) : customBackground; } catch(e){}
         }
         
         let pptxBuffer;
         if (templateType === 'custom' && req.file) {
             const fs = require('fs');
             const path = require('path');
-            const templatePath = path.join(__dirname, 'temp', req.file.originalname);
-            fs.writeFileSync(templatePath, req.file.buffer);
-            const { generateFromTemplate } = require('./services/pptService');
-            pptxBuffer = await generateFromTemplate(slidesJson, title, templatePath);
-            fs.unlinkSync(templatePath);
+            const tempDir = path.join(__dirname, 'temp');
+            if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+            
+            const safeFilename = path.basename(req.file.originalname);
+            const templatePath = path.join(tempDir, `custom_template_${Date.now()}_${safeFilename}`);
+            
+            try {
+                fs.writeFileSync(templatePath, req.file.buffer);
+                const { generateFromTemplate } = require('./services/pptService');
+                pptxBuffer = await generateFromTemplate(slidesJson, title, templatePath);
+            } finally {
+                if (fs.existsSync(templatePath)) fs.unlinkSync(templatePath);
+            }
         } else if (templateType === 'online' && cloudTemplateUrl) {
             const fs = require('fs');
             const path = require('path');
             const tempDir = path.join(__dirname, 'temp');
-            if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+            if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
             
             const tempFilePath = path.join(tempDir, `cloud_template_${Date.now()}.pptx`);
             
@@ -354,7 +367,7 @@ app.post('/api/export/drive', upload.single('template'), async (req, res) => {
         };
         
         const driveRes = await drive.files.create({
-            resource: fileMetadata,
+            requestBody: fileMetadata,
             media: media,
             fields: 'id'
         });

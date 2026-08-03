@@ -1,113 +1,219 @@
 import json
 import argparse
 import os
-
 import re
-from PIL import Image, ImageDraw
 import base64
+import math
 import tempfile
-import os
-
-import tempfile
+from PIL import Image, ImageDraw
 from pptx import Presentation
 from density_optimizer import optimize_presentation
-from pptx.util import Inches, Pt
+from pptx.util import Inches, Pt, Emu
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.chart.data import CategoryChartData
-from pptx.enum.chart import XL_CHART_TYPE
-from pptx.enum.chart import XL_LEGEND_POSITION
+from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION
 
-def apply_defensive_fallbacks(slides):
-    for slide in slides:
-        if not slide.get("title") or not str(slide.get("title")).strip():
-            slide["title"] = "Slide Content Missing"
-        
-        stype = slide.get("slide_type", "default")
-        
-        if stype in ["standard_text", "summary_takeaways", "stat_callout", "two_column_image", "default"]:
-            if not slide.get("bullets") or len(slide.get("bullets", [])) == 0:
-                slide["bullets"] = ["• Please update this content", "• The generator skipped these bullets"]
-                
-        elif stype == "comparison":
-            for col in ["column_left", "column_right"]:
-                if not slide.get(col): slide[col] = {}
-                if not slide[col].get("title"): slide[col]["title"] = "Missing Column"
-                if not slide[col].get("bullets") or len(slide[col].get("bullets", [])) == 0:
-                    slide[col]["bullets"] = ["• Missing data"]
-                    
-        elif stype == "timeline":
-            if not slide.get("steps") or len(slide.get("steps", [])) == 0:
-                slide["steps"] = [{"step": "Step 1", "text": "Missing data"}, {"step": "Step 2", "text": "Missing data"}]
-                
-        elif stype in ["grid_list", "bento_grid"]:
-            if not slide.get("items") or len(slide.get("items", [])) == 0:
-                slide["items"] = [{"item_title": "Missing Item", "item_text": "Missing data", "title": "Missing", "desc": "Missing data", "size": "small"}]
-                
-        elif stype == "metric_dashboard":
-            if not slide.get("metrics") or len(slide.get("metrics", [])) == 0:
-                slide["metrics"] = [{"label": "Missing", "value": "N/A", "change": "+0%"}]
-                
-        elif stype in ["chart_pie", "chart_bar"]:
-            if not slide.get("chart_data") or not slide["chart_data"].get("labels") or not slide["chart_data"].get("values"):
-                slide["chart_data"] = {"labels": ["Data A", "Data B"], "values": [50, 50]}
-                
-        elif stype == "data_table":
-            if not slide.get("table_data") or not slide["table_data"].get("headers") or not slide["table_data"].get("rows"):
-                slide["table_data"] = {"headers": ["Column 1", "Column 2"], "rows": [["N/A", "N/A"]]}
-                
-    return slides
+# ─────────────────────────────────────────────────────────────────────────────
+# CANVAS CONSTANTS  (13.333" × 7.5" = standard 16:9)
+# ─────────────────────────────────────────────────────────────────────────────
+SLIDE_W = 13.333
+SLIDE_H = 7.5
+MARGIN  = 0.5          # outer safe-zone margin
+CONTENT_X = MARGIN
+CONTENT_W = SLIDE_W - MARGIN * 2   # 12.333"
+TITLE_Y   = 0.3
+TITLE_H   = 0.75
+BODY_Y    = TITLE_Y + TITLE_H + 0.1   # 1.15"
+BODY_H    = SLIDE_H - BODY_Y - MARGIN  # ~5.85"
 
+def calc_title_layout(title_text, base_font_pt=24):
+    """Dynamically compute title box height and body top position to prevent overlapping."""
+    words = len(str(title_text).split())
+    lines = math.ceil(words / 9) if words > 0 else 1
+    h = max(0.6, lines * (base_font_pt / 72.0 * 1.3))
+    body_y = TITLE_Y + h + 0.1
+    body_h = SLIDE_H - body_y - MARGIN
+    return h, body_y, body_h
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# COLOUR UTILITIES
+# ─────────────────────────────────────────────────────────────────────────────
 def hex_to_rgb(hex_str):
-    hex_str = hex_str.lstrip('#')
-    if not hex_str: return RGBColor(0, 0, 0)
+    hex_str = str(hex_str).lstrip('#').strip()
+    if len(hex_str) != 6:
+        return RGBColor(0, 0, 0)
     try:
         return RGBColor(int(hex_str[0:2], 16), int(hex_str[2:4], 16), int(hex_str[4:6], 16))
-    except:
+    except Exception:
         return RGBColor(0, 0, 0)
 
-def set_shape_color(shape, hex_str):
+
+def theme_color(theme, key, fallback):
+    """Safely read a colour from the theme dict."""
+    raw = theme.get(key, fallback)
+    return str(raw).lstrip('#')
+
+
+def set_shape_fill(shape, hex_str):
     fill = shape.fill
     fill.solid()
     fill.fore_color.rgb = hex_to_rgb(hex_str)
+
+
+def set_shape_no_line(shape):
     try:
-        shape.line.color.rgb = hex_to_rgb(hex_str)
-    except:
+        shape.line.fill.background()
+    except Exception:
         pass
 
-def add_text_box(slide, text, left, top, width, height, font_size, color_hex, align=PP_ALIGN.LEFT, bold=False, font_name=None):
-    txBox = slide.shapes.add_textbox(Inches(left), Inches(top), Inches(width), Inches(height))
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PLACEHOLDER PURGE — Remove inherited master placeholders that ghost-render
+# ─────────────────────────────────────────────────────────────────────────────
+def purge_placeholders(slide):
+    """
+    After adding a blank slide, python-pptx may still inherit placeholder
+    shapes from the slide master (e.g. title, subtitle boxes).  These ghost
+    elements render as empty boxes that show through the PPTX even though
+    the slide layout is 'blank'.  This function strips them out.
+    """
+    sp_tree = slide.shapes._spTree
+    # Collect all <p:sp> nodes that are placeholders
+    ns = 'http://schemas.openxmlformats.org/presentationml/2006/main'
+    to_remove = [
+        sp for sp in sp_tree.findall(f'{{{ns}}}sp')
+        if sp.find(f'.//{{{ns}}}ph') is not None
+    ]
+    for sp in to_remove:
+        sp_tree.remove(sp)
+
+
+def add_text_box(slide, text, left, top, width, height,
+                 font_size, color_hex,
+                 align=PP_ALIGN.LEFT, bold=False, font_name="Calibri"):
+    """Add a single-paragraph text box. All coords in inches."""
+    txBox = slide.shapes.add_textbox(
+        Inches(left), Inches(top), Inches(width), Inches(height))
     tf = txBox.text_frame
     tf.word_wrap = True
     tf.auto_size = None
     tf.vertical_anchor = MSO_ANCHOR.TOP
     p = tf.paragraphs[0]
-    p.text = text
-    p.alignment = align
+    p.text = str(text)
+    p.font.bold = bold
     p.font.size = Pt(font_size)
     p.font.color.rgb = hex_to_rgb(color_hex)
-    p.font.bold = bold
-    if font_name:
-        p.font.name = font_name
+    p.font.name = font_name
+    p.alignment = align
     return txBox
 
-def add_bullets(slide, bullets, left, top, width, height, font_size, color_hex, font_name=None):
-    txBox = slide.shapes.add_textbox(Inches(left), Inches(top), Inches(width), Inches(height))
+
+def add_bullets(slide, bullets, left, top, width, height,
+                font_size, color_hex,
+                prefix="", font_name="Calibri", align=PP_ALIGN.LEFT,
+                line_spacing_pt=None):
+    """Add a multi-paragraph text box for a bullet list."""
+    txBox = slide.shapes.add_textbox(
+        Inches(left), Inches(top), Inches(width), Inches(height))
     tf = txBox.text_frame
     tf.word_wrap = True
     tf.auto_size = None
     tf.vertical_anchor = MSO_ANCHOR.TOP
     for i, bullet in enumerate(bullets):
         p = tf.add_paragraph() if i > 0 else tf.paragraphs[0]
-        p.text = bullet
+        p.text = f"{prefix}{bullet}" if prefix else str(bullet)
         p.font.size = Pt(font_size)
         p.font.color.rgb = hex_to_rgb(color_hex)
+        p.font.name = font_name
+        p.alignment = align
         p.level = 0
-        if font_name:
-            p.font.name = font_name
+        if line_spacing_pt:
+            from pptx.util import Pt as _Pt
+            p.line_spacing = _Pt(line_spacing_pt)
     return txBox
 
+
+def add_rounded_rect(slide, left, top, width, height, fill_hex, line_hex=None, line_pt=1.5):
+    """Add a rounded rectangle card."""
+    rect = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE,
+        Inches(left), Inches(top), Inches(width), Inches(height))
+    set_shape_fill(rect, fill_hex)
+    if line_hex:
+        rect.line.color.rgb = hex_to_rgb(line_hex)
+        rect.line.width = Pt(line_pt)
+    else:
+        set_shape_no_line(rect)
+    return rect
+
+
+def add_rectangle(slide, left, top, width, height, fill_hex):
+    """Add a plain rectangle (no rounded corners)."""
+    rect = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE,
+        Inches(left), Inches(top), Inches(width), Inches(height))
+    set_shape_fill(rect, fill_hex)
+    set_shape_no_line(rect)
+    return rect
+
+
+def add_oval(slide, left, top, diameter, fill_hex):
+    oval = slide.shapes.add_shape(
+        MSO_SHAPE.OVAL,
+        Inches(left), Inches(top), Inches(diameter), Inches(diameter))
+    set_shape_fill(oval, fill_hex)
+    set_shape_no_line(oval)
+    return oval
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DEFENSIVE FALLBACKS
+# ─────────────────────────────────────────────────────────────────────────────
+def apply_defensive_fallbacks(slides):
+    for slide in slides:
+        if not slide.get("title") or not str(slide.get("title")).strip():
+            slide["title"] = "Slide Content Missing"
+        stype = slide.get("slide_type", "default")
+        if stype in ["standard_text", "summary_takeaways", "stat_callout",
+                     "two_column_image", "default"]:
+            if not slide.get("bullets") or len(slide.get("bullets", [])) == 0:
+                slide["bullets"] = ["Content will appear here", "Generated by the AI engine"]
+        elif stype == "comparison":
+            for col in ["column_left", "column_right"]:
+                if not slide.get(col):
+                    slide[col] = {}
+                if not slide[col].get("title"):
+                    slide[col]["title"] = "Option"
+                if not slide[col].get("bullets") or len(slide[col].get("bullets", [])) == 0:
+                    slide[col]["bullets"] = ["Data point here"]
+        elif stype == "timeline":
+            if not slide.get("steps") or len(slide.get("steps", [])) == 0:
+                slide["steps"] = [{"step": "Step 1", "text": "First phase"},
+                                   {"step": "Step 2", "text": "Second phase"}]
+        elif stype in ["grid_list", "bento_grid"]:
+            if not slide.get("items") or len(slide.get("items", [])) == 0:
+                slide["items"] = [{"item_title": "Item", "item_text": "Description",
+                                    "title": "Item", "desc": "Description", "size": "small"}]
+        elif stype == "metric_dashboard":
+            if not slide.get("metrics") or len(slide.get("metrics", [])) == 0:
+                slide["metrics"] = [{"label": "Metric", "value": "N/A", "change": "+0%"}]
+        elif stype in ["chart_pie", "chart_bar"]:
+            if not slide.get("chart_data") or not slide["chart_data"].get("labels"):
+                slide["chart_data"] = {"labels": ["Data A", "Data B"], "values": [50, 50]}
+        elif stype == "data_table":
+            if not slide.get("table_data") or not slide["table_data"].get("headers"):
+                slide["table_data"] = {"headers": ["Column 1", "Column 2"],
+                                        "rows": [["N/A", "N/A"]]}
+    return slides
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# IMAGE HELPERS
+# ─────────────────────────────────────────────────────────────────────────────
 def save_base64_image(b64_str):
     if b64_str.startswith("data:image"):
         b64_str = b64_str.split(",")[1]
@@ -117,514 +223,782 @@ def save_base64_image(b64_str):
         f.write(img_data)
     return path
 
-def add_column_content(slide, col_data, left, top, width, height, theme):
-    txBox = slide.shapes.add_textbox(Inches(left), Inches(top), Inches(width), Inches(height))
-    tf = txBox.text_frame
-    tf.word_wrap = True
-    tf.auto_size = None
-    tf.vertical_anchor = MSO_ANCHOR.TOP
-    if not col_data: return
-    
-    # First paragraph (Title)
-    p0 = tf.paragraphs[0]
-    p0.text = col_data[0]
-    p0.font.bold = True
-    p0.font.size = Pt(22)
-    p0.font.color.rgb = hex_to_rgb(theme['titleColor'])
-    if theme.get('fontFace'):
-        p0.font.name = theme.get('fontFace')
-        
-    # Subsequent paragraphs (Bullets)
-    for bullet in col_data[1:]:
-        p = tf.add_paragraph()
-        p.text = "• " + bullet
-        p.font.size = Pt(16)
-        p.font.color.rgb = hex_to_rgb(theme['textColor'])
-        if theme.get('bodyFontFace'):
-            p.font.name = theme.get('bodyFontFace')
 
-def build_comparison_slide(slide, data, theme, img_path):
-    add_text_box(slide, data.get("title", ""), 0.5, 0.5, 12.3, 1.0, 34, theme['titleColor'], PP_ALIGN.CENTER, True, theme.get('fontFace'))
-    
-    col_a = data.get("col_a", [])
-    if not col_a and "column_left" in data:
-        col_a = [data["column_left"].get("title", "")] + data["column_left"].get("bullets", [])
-        
-    col_b = data.get("col_b", [])
-    if not col_b and "column_right" in data:
-        col_b = [data["column_right"].get("title", "")] + data["column_right"].get("bullets", [])
-    
-    # Column A (Left)
-    left_rect = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.5), Inches(2.0), Inches(5.8), Inches(4.5))
-    set_shape_color(left_rect, theme['shapeFill'])
-    add_column_content(slide, col_a, 0.7, 2.2, 5.4, 4.1, theme)
+# ─────────────────────────────────────────────────────────────────────────────
+# SLIDE BUILDERS — each mirrors the corresponding React layout component
+# ─────────────────────────────────────────────────────────────────────────────
 
-    # VS badge
-    vs_circle = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(6.33), Inches(3.7), Inches(0.7), Inches(0.7))
-    set_shape_color(vs_circle, theme['titleColor'])
-    add_text_box(slide, "VS", 6.33, 3.8, 0.7, 0.5, 14, theme['bkgd'], PP_ALIGN.CENTER, True, theme.get('fontFace'))
-
-    # Column B (Right)
-    right_rect = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(7.0), Inches(2.0), Inches(5.8), Inches(4.5))
-    set_shape_color(right_rect, theme['shapeFill'])
-    add_column_content(slide, col_b, 7.2, 2.2, 5.4, 4.1, theme)
-
-def build_timeline_slide(slide, data, theme, img_path):
-    add_text_box(slide, data.get("title", ""), 0.5, 0.4, 12.33, 1, 34, theme['titleColor'], PP_ALIGN.CENTER, True, theme.get('fontFace'))
-    
-    steps = data.get("steps", [])
-    if not steps: return
-
-    # Main line
-    line = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.5), Inches(3.2), Inches(12.33), Inches(0.05))
-    set_shape_color(line, theme['shapeFill'])
-
-    step_width = 11.0 / len(steps)
-    for i, step in enumerate(steps):
-        box_left = 1.0 + (i * step_width)
-        box_top = 3.0
-        
-        # Node
-        node = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(box_left + (step_width/2) - 0.2), Inches(3.05), Inches(0.4), Inches(0.4))
-        set_shape_color(node, theme['accent'])
-
-        add_text_box(slide, step.get("step", ""), box_left, 3.5, step_width - 0.2, 0.5, 14, theme['accent'], PP_ALIGN.CENTER, True, theme.get('fontFace'))
-        add_text_box(slide, step.get("text", ""), box_left, 4.0, step_width - 0.2, 2.0, 12, theme['textColor'], PP_ALIGN.CENTER, False, theme.get('bodyFontFace'))
-
-def build_stat_slide(slide, data, theme, img_path):
-    add_text_box(slide, data.get("stat", ""), 0.5, 1.5, 6.0, 2.0, 80, theme['accent'], PP_ALIGN.CENTER, True, theme.get('fontFace'))
-    add_text_box(slide, data.get("label", ""), 0.5, 3.5, 6.0, 1.0, 24, theme['titleColor'], PP_ALIGN.CENTER, True, theme.get('fontFace'))
-    
-    line = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(6.6), Inches(1.5), Inches(0.05), Inches(4.0))
-    set_shape_color(line, theme['accent'])
-    
-    add_text_box(slide, data.get("title", ""), 7.0, 1.5, 5.8, 1.0, 28, theme['titleColor'], PP_ALIGN.LEFT, True, theme.get('fontFace'))
-    add_bullets(slide, data.get("bullets", []), 7.0, 2.5, 5.8, 3.0, 18, theme['textColor'], theme.get('bodyFontFace'))
-
-def build_grid_slide(slide, data, theme, img_path):
-    add_text_box(slide, data.get("title", ""), 0.5, 0.4, 12.33, 1, 34, theme['titleColor'], PP_ALIGN.CENTER, True, theme.get('fontFace'))
-    
-    items = data.get("items", [])
-    if not items: return
-    
-    cols = 2 if len(items) in [2, 4] else (4 if len(items) > 6 else 3)
-    box_w = (12.33 - ((cols - 1) * 0.4)) / cols
-    box_h = 2.0
-    
-    for i, item in enumerate(items):
-        r = i // cols
-        c = i % cols
-        x = 0.5 + (c * (box_w + 0.4))
-        y = 1.5 + (r * (box_h + 0.4))
-        
-        rect = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(x), Inches(y), Inches(box_w), Inches(box_h))
-        set_shape_color(rect, theme['shapeFill'])
-        
-        add_text_box(slide, item.get("item_title", ""), x+0.1, y+0.1, box_w-0.2, 0.4, 16, theme['titleColor'], PP_ALIGN.LEFT, True, theme.get('fontFace'))
-        add_text_box(slide, item.get("item_text", ""), x+0.1, y+0.6, box_w-0.2, 1.3, 12, theme['textColor'], PP_ALIGN.LEFT, False, theme.get('bodyFontFace'))
+def build_title_hero_slide(slide, data, theme):
+    accent   = theme_color(theme, "accent",    "7C3AED")
+    txt_col  = theme_color(theme, "titleColor", "FFFFFF")
+    title    = data.get("title", "Presentation Title")
+    subtitle = data.get("subtitle", "")
+    bar_w = CONTENT_W * 0.55
+    bar_x = (SLIDE_W - bar_w) / 2
+    title_y = SLIDE_H / 2 - 1.0
+    add_rectangle(slide, bar_x, title_y - 0.18, bar_w, 0.06, accent)
+    add_text_box(slide, title, 1.0, title_y, CONTENT_W - 0.5, 1.1,
+                 40, txt_col, PP_ALIGN.CENTER, bold=True)
+    add_rectangle(slide, bar_x, title_y + 1.15, bar_w, 0.06, accent)
+    if subtitle:
+        add_text_box(slide, subtitle, 1.5, title_y + 1.3, CONTENT_W - 1.5, 0.7,
+                     18, accent, PP_ALIGN.CENTER)
 
 
-def build_chart_slide(slide, data, theme, img_path, chart_type):
-    add_text_box(slide, data.get("title", ""), 0.5, 0.5, 5.0, 1.0, 32, theme['titleColor'], PP_ALIGN.LEFT, True, theme.get('fontFace'))
-    add_text_box(slide, data.get("description", ""), 0.5, 1.5, 5.0, 2.0, 18, theme['textColor'], PP_ALIGN.LEFT, False, theme.get('bodyFontFace'))
-    
-    chart_data_obj = data.get("chart_data", {})
-    labels = chart_data_obj.get("labels", [])
-    values = chart_data_obj.get("values", [])
-    
-    if not labels or not values:
-        # Fallback to default
-        build_default_slide(slide, data, theme, img_path)
-        return
-        
-    chart_data = CategoryChartData()
-    chart_data.categories = labels
-    chart_data.add_series('Series 1', values)
-    
-    x, y, cx, cy = Inches(6.0), Inches(1.5), Inches(6.5), Inches(5.0)
-    
-    ctype = XL_CHART_TYPE.PIE if chart_type == 'pie' else XL_CHART_TYPE.COLUMN_CLUSTERED
-    chart = slide.shapes.add_chart(ctype, x, y, cx, cy, chart_data).chart
-    chart.has_legend = True
-    chart.legend.position = XL_LEGEND_POSITION.BOTTOM
+def build_comparison_slide(slide, data, theme):
+    """
+    Mirrors ComparisonLayout.jsx:
+    - Title at top-center
+    - Two rounded-rect cards side by side
+    - Thin accent-colored top bar on each card
+    - "VS" circle badge centered between cards
+    - ✓ bullets in left card, → bullets in right card
+    """
+    accent   = theme_color(theme, "accent",    "7C3AED")
+    shape_bg = theme_color(theme, "shapeFill", "1A1A2E")
+    border   = theme_color(theme, "bkgd",      "2D3748")
+    txt_col  = theme_color(theme, "textColor", "FFFFFF")
+    sub_col  = "A0A8BE"
 
-def build_data_table_slide(slide, data, theme, img_path):
-    add_text_box(slide, data.get("title", ""), 0.5, 0.4, 12.33, 1, 32, theme['titleColor'], PP_ALIGN.CENTER, True, theme.get('fontFace'))
-    
-    table_data = data.get("table_data", {})
-    headers = table_data.get("headers", [])
-    rows = table_data.get("rows", [])
-    
-    if not headers or not rows:
-        build_default_slide(slide, data, theme, img_path)
-        return
-        
-    num_rows = len(rows) + 1
-    num_cols = len(headers)
-    
-    left, top, width, height = Inches(1.0), Inches(1.5), Inches(11.33), Inches(5.0)
-    table_shape = slide.shapes.add_table(num_rows, num_cols, left, top, width, height)
-    table = table_shape.table
-    
-    for i, header in enumerate(headers):
-        cell = table.cell(0, i)
-        cell.text = str(header)
-        cell.fill.solid()
-        cell.fill.fore_color.rgb = hex_to_rgb(theme['accent'])
-        for p in cell.text_frame.paragraphs:
-            p.font.color.rgb = hex_to_rgb(theme['bkgd'])
-            if theme.get('fontFace'):
-                p.font.name = theme.get('fontFace')
-            
-    for r_idx, row in enumerate(rows):
-        for c_idx, val in enumerate(row):
-            if c_idx < num_cols:
-                cell = table.cell(r_idx + 1, c_idx)
-                cell.text = str(val)
-                cell.fill.solid()
-                if r_idx % 2 == 0:
-                    cell.fill.fore_color.rgb = hex_to_rgb(theme['shapeFill'])
-                else:
-                    cell.fill.fore_color.rgb = hex_to_rgb(theme['bkgd'])
-                for p in cell.text_frame.paragraphs:
-                    p.font.color.rgb = hex_to_rgb(theme['textColor'])
-                    if theme.get('bodyFontFace'):
-                        p.font.name = theme.get('bodyFontFace')
+    title = data.get("title", "Comparison")
+    add_text_box(slide, title, CONTENT_X, TITLE_Y, CONTENT_W, TITLE_H,
+                 30, txt_col, PP_ALIGN.CENTER, bold=True)
 
-def build_bento_grid_slide(slide, data, theme, img_path):
-    add_text_box(slide, data.get("title", ""), 0.5, 0.4, 12.33, 1, 34, theme['titleColor'], PP_ALIGN.CENTER, True, theme.get('fontFace'))
-    
+    left_d  = data.get("column_left",  {"title": "Option A", "bullets": []})
+    right_d = data.get("column_right", {"title": "Option B", "bullets": []})
+
+    # Card dimensions
+    card_y = BODY_Y + 0.1
+    card_h = BODY_H - 0.2
+    card_w = 5.8
+    left_x  = CONTENT_X + 0.2
+    right_x = SLIDE_W - MARGIN - 0.2 - card_w
+
+    # Left card
+    add_rounded_rect(slide, left_x, card_y, card_w, card_h, shape_bg, border)
+    # Accent top bar on left card (4pt height ≈ 0.055")
+    add_rectangle(slide, left_x, card_y, card_w, 0.06, accent)
+    add_text_box(slide, left_d.get("title", "Option A"),
+                 left_x + 0.3, card_y + 0.25, card_w - 0.6, 0.55,
+                 16, txt_col, PP_ALIGN.CENTER, bold=True)
+    add_bullets(slide, left_d.get("bullets", []),
+                left_x + 0.3, card_y + 0.9, card_w - 0.6, card_h - 1.1,
+                14, sub_col, prefix="✓  ")
+
+    # Right card
+    add_rounded_rect(slide, right_x, card_y, card_w, card_h, shape_bg, border)
+    add_rectangle(slide, right_x, card_y, card_w, 0.06, accent)
+    add_text_box(slide, right_d.get("title", "Option B"),
+                 right_x + 0.3, card_y + 0.25, card_w - 0.6, 0.55,
+                 16, txt_col, PP_ALIGN.CENTER, bold=True)
+    add_bullets(slide, right_d.get("bullets", []),
+                right_x + 0.3, card_y + 0.9, card_w - 0.6, card_h - 1.1,
+                14, sub_col, prefix="→  ")
+
+    # VS badge — circle in the center gap
+    badge_d  = 0.7
+    badge_cx = SLIDE_W / 2 - badge_d / 2
+    badge_cy = SLIDE_H / 2 - badge_d / 2
+    add_oval(slide, badge_cx, badge_cy, badge_d, accent)
+    add_text_box(slide, "VS",
+                 badge_cx, badge_cy + 0.08, badge_d, badge_d - 0.15,
+                 12, "FFFFFF", PP_ALIGN.CENTER, bold=True)
+
+
+def build_bento_grid_slide(slide, data, theme):
+    """
+    Mirrors BentoGridLayout.jsx:
+    - 3-column grid, items have size: small/large/wide/tall
+    - Each cell is a rounded rect with accent top bar
+    """
+    accent   = theme_color(theme, "accent",    "7C3AED")
+    shape_bg = theme_color(theme, "shapeFill", "1A1A2E")
+    border   = theme_color(theme, "bkgd",      "2D3748")
+    txt_col  = theme_color(theme, "textColor", "FFFFFF")
+    sub_col  = "A0A8BE"
+
+    title = data.get("title", "Overview")
+    add_text_box(slide, title, CONTENT_X, TITLE_Y, CONTENT_W, TITLE_H,
+                 24, txt_col, PP_ALIGN.CENTER, bold=True)
+
     items = data.get("items", [])
     if not items:
-        build_default_slide(slide, data, theme, img_path)
         return
-        
-    # Fixed 3-column grid mapping
-    cols = 3
-    col_w = (12.33 - 1.0 - (0.4 * (cols - 1))) / cols
-    row_h = 2.0
-    
-    current_x = 0.5
-    current_y = 1.5
-    
-    for item in items:
-        size = item.get('size', 'small')
-        
-        # Calculate width and height based on size
-        w = col_w
-        h = row_h
-        
-        if size == 'large':
-            w = (col_w * 2) + 0.4
-            h = (row_h * 2) + 0.4
-        elif size == 'wide':
-            w = (col_w * 3) + 0.8
-        elif size == 'tall':
-            h = (row_h * 2) + 0.4
-            
-        rect = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(current_x), Inches(current_y), Inches(w), Inches(h))
-        set_shape_color(rect, theme['shapeFill'])
-        
-        add_text_box(slide, item.get("title", ""), current_x + 0.2, current_y + 0.2, w - 0.4, 0.8, 20 if size == 'large' else 16, theme['titleColor'], PP_ALIGN.LEFT, True, theme.get('fontFace'))
-        add_text_box(slide, item.get("desc", ""), current_x + 0.2, current_y + 1.0, w - 0.4, h - 1.2, 14 if size == 'large' else 12, theme['textColor'], PP_ALIGN.LEFT, False, theme.get('bodyFontFace'))
-        
-        # Simple flow layout (not true masonry for simplicity)
-        current_x += w + 0.4
-        if current_x > 12.0:
-            current_x = 0.5
-            current_y += h + 0.4
 
-def build_metric_dashboard_slide(slide, data, theme, img_path):
-    add_text_box(slide, data.get("title", ""), 0.5, 0.4, 12.33, 1, 34, theme['titleColor'], PP_ALIGN.CENTER, True, theme.get('fontFace'))
-    
+    # Grid geometry
+    cols     = 3
+    rows     = 2
+    gap      = 0.18
+    grid_x   = CONTENT_X + 0.1
+    grid_y   = BODY_Y + 0.1
+    grid_w   = CONTENT_W - 0.2
+    grid_h   = BODY_H - 0.2
+    cell_w   = (grid_w - gap * (cols - 1)) / cols
+    cell_h   = (grid_h - gap * (rows - 1)) / rows
+
+    # Simple placement: lay items left-to-right, top-to-bottom with size-based spans
+    # Track occupied cells with a grid bitmap
+    occupied = [[False] * cols for _ in range(rows)]
+
+    def find_free(span_c, span_r):
+        for r in range(rows):
+            for c in range(cols):
+                if c + span_c > cols or r + span_r > rows:
+                    continue
+                ok = all(not occupied[r + dr][c + dc]
+                         for dr in range(span_r) for dc in range(span_c))
+                if ok:
+                    return r, c
+        return None
+
+    def mark_occupied(r, c, span_c, span_r):
+        for dr in range(span_r):
+            for dc in range(span_c):
+                if r + dr < rows and c + dc < cols:
+                    occupied[r + dr][c + dc] = True
+
+    for item in items:
+        size = (item.get("size") or "small").lower()
+        if size == "large":
+            span_c, span_r = 2, 2
+        elif size == "wide":
+            span_c, span_r = 3, 1
+        elif size == "tall":
+            span_c, span_r = 1, 2
+        else:
+            span_c, span_r = 1, 1
+
+        pos = find_free(span_c, span_r)
+        if pos is None:
+            # Fallback: small cell
+            span_c, span_r = 1, 1
+            pos = find_free(1, 1)
+        if pos is None:
+            continue
+
+        r, c = pos
+        mark_occupied(r, c, span_c, span_r)
+
+        cx = grid_x + c * (cell_w + gap)
+        cy = grid_y + r * (cell_h + gap)
+        w  = cell_w * span_c + gap * (span_c - 1)
+        h  = cell_h * span_r + gap * (span_r - 1)
+
+        # Card
+        add_rounded_rect(slide, cx, cy, w, h, shape_bg, border, line_pt=1.0)
+        # Accent top stripe
+        add_rectangle(slide, cx, cy, w, 0.05, accent)
+
+        title_text = item.get("item_title") or item.get("title", "")
+        desc_text  = item.get("item_text")  or item.get("desc",  "")
+
+        # Scale fonts proportionally with cell area (mirrors React text-3xl/text-xl logic)
+        area = w * h
+        if area > 10:    # large (2x2 cell ~11.5 sq inches)
+            fs_title, fs_desc = 22, 14
+        elif area > 5:   # wide (3x1 ~8 sq in) or tall (1x2 ~5.8 sq in)
+            fs_title, fs_desc = 18, 13
+        else:            # small (1x1 ~2.9 sq in)
+            fs_title, fs_desc = 13, 11
+
+        title_box_h = min(0.55, h * 0.2)
+        add_text_box(slide, title_text,
+                     cx + 0.2, cy + 0.2, w - 0.4, title_box_h,
+                     fs_title, txt_col, bold=True)
+        add_text_box(slide, desc_text,
+                     cx + 0.2, cy + 0.2 + title_box_h + 0.1, w - 0.4, h - 0.2 - title_box_h - 0.2,
+                     fs_desc, sub_col)
+
+
+def build_timeline_slide(slide, data, theme):
+    """
+    Mirrors TimelineLayout.jsx:
+    - Horizontal connector line across mid-slide
+    - Even-indexed steps: card ABOVE the line
+    - Odd-indexed steps:  card BELOW the line
+    - Filled circle dot at each intersection
+    """
+    accent   = theme_color(theme, "accent",    "7C3AED")
+    shape_bg = theme_color(theme, "shapeFill", "1A1A2E")
+    border   = theme_color(theme, "bkgd",      "2D3748")
+    txt_col  = theme_color(theme, "textColor", "FFFFFF")
+    sub_col  = "A0A8BE"
+
+    title = data.get("title", "Timeline")
+    add_text_box(slide, title, CONTENT_X, TITLE_Y, CONTENT_W, TITLE_H,
+                 24, txt_col, PP_ALIGN.CENTER, bold=True)
+
+    steps = data.get("steps", [])
+    if not steps:
+        return
+
+    # Mid-line y position
+    line_y = 3.9
+    line_x = CONTENT_X + 0.3
+    line_w = CONTENT_W - 0.6
+
+    # Draw connector line
+    line = add_rectangle(slide, line_x, line_y, line_w, 0.04, sub_col)
+
+    n = len(steps)
+    step_w_total = line_w / n
+    card_w = min(step_w_total - 0.2, 2.4)
+    card_h = 1.5
+    dot_d  = 0.28
+
+    above_card_y = line_y - card_h - 0.35
+    below_card_y = line_y + 0.35
+
+    for i, step in enumerate(steps):
+        # Horizontal center of this step's dot
+        dot_cx = line_x + (i + 0.5) * step_w_total
+        card_x = dot_cx - card_w / 2
+        dot_left = dot_cx - dot_d / 2
+        dot_top  = line_y - dot_d / 2
+
+        # Card position alternates above/below
+        card_y = above_card_y if i % 2 == 0 else below_card_y
+
+        # Card
+        add_rounded_rect(slide, card_x, card_y, card_w, card_h, shape_bg, border, line_pt=1.0)
+        # Step label
+        add_text_box(slide, step.get("step", ""),
+                     card_x + 0.12, card_y + 0.1, card_w - 0.24, 0.38,
+                     10, accent, PP_ALIGN.CENTER, bold=True)
+        # Step text
+        add_text_box(slide, step.get("text", ""),
+                     card_x + 0.12, card_y + 0.5, card_w - 0.24, card_h - 0.55,
+                     10, sub_col, PP_ALIGN.CENTER)
+
+        # Connector vertical stub from dot to card
+        if i % 2 == 0:
+            stub_y = card_y + card_h
+            stub_h = dot_top - stub_y
+        else:
+            stub_y = dot_top + dot_d
+            stub_h = card_y - stub_y
+        if stub_h > 0:
+            add_rectangle(slide, dot_cx - 0.015, stub_y, 0.03, stub_h, sub_col)
+
+        # Dot
+        add_oval(slide, dot_left, dot_top, dot_d, accent)
+
+
+def build_stat_callout_slide(slide, data, theme):
+    """
+    Mirrors StatCalloutLayout.jsx:
+    - Left half: giant stat number + label (accent colored)
+    - Vertical divider line at center
+    - Right half: title + bullet list
+    """
+    accent   = theme_color(theme, "accent",    "7C3AED")
+    txt_col  = theme_color(theme, "textColor", "FFFFFF")
+    sub_col  = "A0A8BE"
+
+    stat  = data.get("stat")  or data.get("huge_text", "100%")
+    label = data.get("label") or data.get("subtext",   "")
+
+    # Dynamically size the stat number
+    stat_len = len(str(stat))
+    if stat_len <= 6:
+        stat_pt = 64
+    elif stat_len <= 12:
+        stat_pt = 48
+    else:
+        stat_pt = 36
+
+    half_w = CONTENT_W / 2 - 0.4
+
+    # Left — stat number
+    stat_y = SLIDE_H / 2 - 1.0
+    add_text_box(slide, stat,
+                 CONTENT_X, stat_y, half_w, 1.8,
+                 stat_pt, accent, PP_ALIGN.CENTER, bold=True)
+    if label:
+        add_text_box(slide, label.upper(),
+                     CONTENT_X, stat_y + 1.9, half_w, 0.6,
+                     14, sub_col, PP_ALIGN.CENTER, bold=True)
+
+    # Vertical divider at center
+    div_x = SLIDE_W / 2 - 0.01
+    add_rectangle(slide, div_x, BODY_Y, 0.03, BODY_H, accent)
+
+    # Right — title + bullets
+    right_x = SLIDE_W / 2 + 0.35
+    right_w = SLIDE_W - right_x - MARGIN
+    title = data.get("title", "")
+    add_text_box(slide, title, right_x, BODY_Y + 0.1, right_w, 0.7,
+                 18, txt_col, bold=True)
+
+    bullets = data.get("bullets", [])
+    if bullets:
+        add_bullets(slide, bullets,
+                    right_x, BODY_Y + 0.9, right_w, BODY_H - 1.0,
+                    13, sub_col, prefix="• ", line_spacing_pt=18)
+
+
+def build_bento_grid_slide_v2(slide, data, theme):
+    """Alias kept for compatibility — calls main bento builder."""
+    build_bento_grid_slide(slide, data, theme)
+
+
+def build_grid_list_slide(slide, data, theme):
+    """
+    Mirrors GridListLayout.jsx:
+    - Title at top
+    - 2×2 grid of item cards, each with a numbered badge
+    """
+    accent   = theme_color(theme, "accent",    "7C3AED")
+    shape_bg = theme_color(theme, "shapeFill", "1A1A2E")
+    border   = theme_color(theme, "bkgd",      "2D3748")
+    txt_col  = theme_color(theme, "textColor", "FFFFFF")
+    sub_col  = "A0A8BE"
+
+    title = data.get("title", "Overview")
+    add_text_box(slide, title, CONTENT_X, TITLE_Y, CONTENT_W, TITLE_H,
+                 24, txt_col, PP_ALIGN.CENTER, bold=True)
+
+    items = data.get("items", [])[:4]
+    if not items:
+        return
+
+    gap    = 0.2
+    col_w  = (CONTENT_W - gap) / 2
+    row_h  = (BODY_H - gap) / 2
+
+    for i, item in enumerate(items):
+        row = i // 2
+        col = i % 2
+        cx = CONTENT_X + col * (col_w + gap)
+        cy = BODY_Y + row * (row_h + gap)
+
+        add_rounded_rect(slide, cx, cy, col_w, row_h, shape_bg, border, line_pt=1.0)
+        # Number badge
+        add_oval(slide, cx + 0.2, cy + 0.18, 0.38, accent)
+        add_text_box(slide, str(i + 1),
+                     cx + 0.2, cy + 0.2, 0.38, 0.32,
+                     11, "FFFFFF", PP_ALIGN.CENTER, bold=True)
+        add_text_box(slide, item.get("item_title") or item.get("title", ""),
+                     cx + 0.7, cy + 0.22, col_w - 0.9, 0.45,
+                     14, txt_col, bold=True)
+        add_text_box(slide, item.get("item_text") or item.get("desc", ""),
+                     cx + 0.2, cy + 0.75, col_w - 0.4, row_h - 0.95,
+                     11, sub_col)
+
+
+def build_three_card_grid_slide(slide, data, theme):
+    accent   = theme_color(theme, "accent",    "7C3AED")
+    shape_bg = theme_color(theme, "shapeFill", "1A1A2E")
+    border   = theme_color(theme, "bkgd",      "2D3748")
+    txt_col  = theme_color(theme, "textColor", "FFFFFF")
+    sub_col  = "A0A8BE"
+
+    title = data.get("title", "Overview")
+    add_text_box(slide, title, CONTENT_X, TITLE_Y, CONTENT_W, TITLE_H,
+                 24, txt_col, PP_ALIGN.CENTER, bold=True)
+
+    cards = data.get("cards", [])[:3]
+    if not cards:
+        return
+
+    n = len(cards)
+    gap = 0.2
+    card_w = (CONTENT_W - gap * (n - 1)) / n
+    card_h = BODY_H - 0.2
+    card_y = BODY_Y + 0.1
+
+    for i, card in enumerate(cards):
+        cx = CONTENT_X + i * (card_w + gap)
+        add_rounded_rect(slide, cx, card_y, card_w, card_h, shape_bg, border, line_pt=1.0)
+        add_rectangle(slide, cx, card_y, card_w, 0.05, accent)
+
+        add_text_box(slide, card.get("card_title", ""),
+                     cx + 0.2, card_y + 0.25, card_w - 0.4, 0.5,
+                     14, txt_col, bold=True)
+        add_text_box(slide, card.get("card_text", ""),
+                     cx + 0.2, card_y + 0.8, card_w - 0.4, card_h - 0.9,
+                     11, sub_col)
+
+
+def build_metric_dashboard_slide(slide, data, theme):
+    """
+    Mirrors MetricDashboardLayout — row of metric cards:
+    label / value / change-badge
+    """
+    accent   = theme_color(theme, "accent",    "7C3AED")
+    shape_bg = theme_color(theme, "shapeFill", "1A1A2E")
+    border   = theme_color(theme, "bkgd",      "2D3748")
+    txt_col  = theme_color(theme, "textColor", "FFFFFF")
+    green    = "10B981"
+    red      = "EF4444"
+
+    title = data.get("title", "Metrics")
+    add_text_box(slide, title, CONTENT_X, TITLE_Y, CONTENT_W, TITLE_H,
+                 24, txt_col, PP_ALIGN.CENTER, bold=True)
+
     metrics = data.get("metrics", [])
     if not metrics:
-        build_default_slide(slide, data, theme, img_path)
         return
-        
-    box_w = 5.5
-    box_h = 2.5
-    
-    for i, m in enumerate(metrics[:4]):
-        r = i // 2
-        c = i % 2
-        x = 0.8 + (c * (box_w + 0.5))
-        y = 1.5 + (r * (box_h + 0.5))
-        
-        rect = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(x), Inches(y), Inches(box_w), Inches(box_h))
-        set_shape_color(rect, theme['shapeFill'])
-        
-        add_text_box(slide, m.get("change", ""), x + box_w - 1.5, y + 0.2, 1.3, 0.5, 14, theme['accent'], PP_ALIGN.RIGHT, True, theme.get('fontFace'))
-        add_text_box(slide, m.get("value", ""), x + 0.2, y + 0.7, box_w - 0.4, 1.0, 48, theme['titleColor'], PP_ALIGN.CENTER, True, theme.get('fontFace'))
-        add_text_box(slide, m.get("label", ""), x + 0.2, y + 1.8, box_w - 0.4, 0.5, 16, theme['textColor'], PP_ALIGN.CENTER, True, theme.get('fontFace'))
+
+    n      = len(metrics)
+    gap    = 0.2
+    card_w = (CONTENT_W - gap * (n - 1)) / n
+    card_h = BODY_H - 0.3
+    card_y = BODY_Y + 0.15
+
+    for i, m in enumerate(metrics):
+        cx = CONTENT_X + i * (card_w + gap)
+        add_rounded_rect(slide, cx, card_y, card_w, card_h, shape_bg, border, line_pt=1.0)
+        add_rectangle(slide, cx, card_y, card_w, 0.05, accent)
+
+        # Label
+        add_text_box(slide, m.get("label", ""),
+                     cx + 0.15, card_y + 0.3, card_w - 0.3, 0.5,
+                     12, txt_col, PP_ALIGN.CENTER, bold=True)
+        # Value
+        add_text_box(slide, m.get("value", ""),
+                     cx + 0.1, card_y + 0.9, card_w - 0.2, 1.0,
+                     30, accent, PP_ALIGN.CENTER, bold=True)
+        # Change badge (green if positive, red if negative)
+        change = m.get("change", "")
+        change_col = red if str(change).startswith("-") else green
+        add_text_box(slide, change,
+                     cx + 0.15, card_y + 2.0, card_w - 0.3, 0.45,
+                     12, change_col, PP_ALIGN.CENTER, bold=True)
 
 
-def build_split_card_slide(slide, slide_data, theme, img_path):
-    # 1. Main Outer Card Backdrop (Emulates Web UI Glassmorphism Container)
-    outer_card = slide.shapes.add_shape(
-        MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.8), Inches(0.8), Inches(11.733), Inches(5.9)
-    )
-    outer_card.fill.solid()
-    outer_card.fill.fore_color.rgb = hex_to_rgb(theme['shapeFill'])
-    try:
-        outer_card.line.color.rgb = hex_to_rgb(theme['accent'])
-    except:
-        pass
-    
-    # 2. Left Column: Title & Subtitle Frame
-    text_box = slide.shapes.add_textbox(Inches(1.3), Inches(2.0), Inches(5.0), Inches(3.5))
-    tf = text_box.text_frame
-    tf.word_wrap = True
-    tf.auto_size = None
-    
-    # Render Title
-    p_title = tf.paragraphs[0]
-    p_title.text = slide_data.get("title", "")
-    p_title.font.size = Pt(36)
-    p_title.font.bold = True
-    p_title.font.color.rgb = hex_to_rgb(theme['titleColor'])
-    p_title.space_after = Pt(14)
-    if theme.get('fontFace'):
-        p_title.font.name = theme.get('fontFace')
-    
-    # Render Subtitle (If present)
-    subtitle_text = slide_data.get("subtitle") or slide_data.get("description", "")
-    if subtitle_text:
-        p_sub = tf.add_paragraph()
-        p_sub.text = subtitle_text
-        p_sub.font.size = Pt(18)
-        p_sub.font.color.rgb = hex_to_rgb(theme['textColor'])
-        p_sub.space_after = Pt(14)
-        if theme.get('bodyFontFace'):
-            p_sub.font.name = theme.get('bodyFontFace')
+def build_split_card_slide(slide, data, theme, img_path):
+    """
+    Mirrors TwoColumnLayout / hero_split:
+    - Master card container shape
+    - Title inside card (left side) or above card
+    - Left: bullets / text
+    - Right: image or subtitle
+    """
+    accent   = theme_color(theme, "accent",    "7C3AED")
+    shape_bg = theme_color(theme, "shapeFill", "1A1A2E")
+    border   = theme_color(theme, "bkgd",      "2D3748")
+    txt_col  = theme_color(theme, "textColor", "FFFFFF")
+    sub_col  = "A0A8BE"
 
-    # Render Bullets (If present)
-    for bullet in slide_data.get("bullets", []):
-        p_b = tf.add_paragraph()
-        p_b.text = f"• {bullet}"
-        p_b.font.size = Pt(14)
-        p_b.font.color.rgb = hex_to_rgb(theme['textColor'])
-        if theme.get('bodyFontFace'):
-            p_b.font.name = theme.get('bodyFontFace')
+    card_y = BODY_Y + 0.1
+    card_h = BODY_H - 0.2
+    card_w = CONTENT_W
 
-    # 3. Right Column: Dedicated Image Container
-    if img_path and os.path.exists(img_path):
-        # Insert image accurately constrained inside right half of card
-        slide.shapes.add_picture(
-            img_path, Inches(6.8), Inches(1.3), width=Inches(5.2), height=Inches(4.8)
-        )
-    else:
-        # Fallback Placeholder Box if image hasn't loaded
-        img_card = slide.shapes.add_shape(
-            MSO_SHAPE.ROUNDED_RECTANGLE, Inches(6.8), Inches(1.3), Inches(5.2), Inches(4.8)
-        )
-        img_card.fill.solid()
-        img_card.fill.fore_color.rgb = hex_to_rgb(theme['bkgd'])
-        img_card.line.fill.background()
+    # Master card container
+    add_rounded_rect(slide, CONTENT_X, card_y, card_w, card_h, shape_bg, border, line_pt=1.0)
+    add_rectangle(slide, CONTENT_X, card_y, card_w, 0.06, accent)
 
-def build_default_slide(slide, data, theme, img_path):
-    add_text_box(slide, data.get("title", ""), 0.5, 0.5, 12.33, 1, 34, theme['titleColor'], PP_ALIGN.CENTER, True, theme.get('fontFace'))
-    
+    inner_w = (card_w - 0.8) / 2
+    left_x = CONTENT_X + 0.4
+    right_x = left_x + inner_w + 0.4
+
+    # Title inside left column of card
+    title = data.get("title", "")
+    add_text_box(slide, title, left_x, card_y + 0.3, inner_w, 0.8,
+                 22, txt_col, bold=True)
+
     bullets = data.get("bullets", [])
-    if img_path:
-        if bullets:
-            add_bullets(slide, bullets, 0.5, 1.5, 6.0, 5.0, 20, theme['textColor'], theme.get('bodyFontFace'))
-            pic = slide.shapes.add_picture(img_path, Inches(7.0), Inches(1.5), height=Inches(4.0))
-            pic.left = int(Inches(7.0) + (Inches(5.8) - pic.width) / 2)
-        else:
-            pic = slide.shapes.add_picture(img_path, Inches(0), Inches(1.5), height=Inches(4.5))
-            pic.left = int((Inches(13.333) - pic.width) / 2)
+    if bullets:
+        add_bullets(slide, bullets,
+                    left_x, card_y + 1.2, inner_w, card_h - 1.4,
+                    13, sub_col, prefix="• ")
+
+    if img_path and os.path.exists(img_path):
+        slide.shapes.add_picture(img_path, Inches(right_x), Inches(card_y + 0.3),
+                                 width=Inches(inner_w), height=Inches(card_h - 0.6))
     else:
-        if bullets:
-            add_bullets(slide, bullets, 1.5, 1.8, 10.33, 5.0, 20, theme['textColor'], theme.get('bodyFontFace'))
+        subtitle = data.get("subtitle", "")
+        if subtitle:
+            add_text_box(slide, subtitle, right_x, card_y + 0.3, inner_w, card_h - 0.6,
+                         14, sub_col)
 
 
+
+def build_chart_slide(slide, data, theme, chart_type):
+    """Pie or Bar chart using pptx native chart engine."""
+    txt_col  = theme_color(theme, "textColor", "FFFFFF")
+
+    title = data.get("title", "Chart")
+    add_text_box(slide, title, CONTENT_X, TITLE_Y, CONTENT_W, TITLE_H,
+                 24, txt_col, bold=True)
+
+    chart_data_raw = data.get("chart_data", {})
+    labels = chart_data_raw.get("labels", ["A", "B", "C"])
+    values = chart_data_raw.get("values", [10, 20, 30])
+
+    cdata = CategoryChartData()
+    cdata.categories = labels
+    cdata.add_series("Series 1", values)
+
+    ctype = XL_CHART_TYPE.PIE if chart_type == "pie" else XL_CHART_TYPE.COLUMN_CLUSTERED
+
+    chart_left = CONTENT_X + 1.0
+    chart = slide.shapes.add_chart(
+        ctype,
+        Inches(chart_left), Inches(BODY_Y),
+        Inches(CONTENT_W - 2.0), Inches(BODY_H),
+        cdata).chart
+    chart.has_legend = True
+    chart.legend.position = XL_LEGEND_POSITION.BOTTOM
+    try:
+        chart.legend.font.color.rgb = hex_to_rgb(txt_col)
+    except Exception:
+        pass
+
+
+def build_data_table_slide(slide, data, theme):
+    """Data table with styled header row."""
+    accent   = theme_color(theme, "accent",    "7C3AED")
+    txt_col  = theme_color(theme, "textColor", "FFFFFF")
+    sub_col  = "A0A8BE"
+    shape_bg = theme_color(theme, "shapeFill", "1A1A2E")
+
+    title = data.get("title", "Data Table")
+    add_text_box(slide, title, CONTENT_X, TITLE_Y, CONTENT_W, TITLE_H,
+                 24, txt_col, bold=True)
+
+    tdata   = data.get("table_data", {})
+    headers = tdata.get("headers", ["Col 1", "Col 2"])
+    rows    = tdata.get("rows", [["A", "B"]])
+
+    num_rows = len(rows) + 1
+    num_cols = max(len(headers), 1)
+
+    table = slide.shapes.add_table(
+        num_rows, num_cols,
+        Inches(CONTENT_X), Inches(BODY_Y),
+        Inches(CONTENT_W), Inches(BODY_H)).table
+
+    for c, header in enumerate(headers):
+        cell = table.cell(0, c)
+        cell.text = str(header)
+        cell.text_frame.paragraphs[0].font.bold = True
+        cell.text_frame.paragraphs[0].font.color.rgb = hex_to_rgb("FFFFFF")
+        cell.fill.solid()
+        cell.fill.fore_color.rgb = hex_to_rgb(accent)
+
+    for r, row in enumerate(rows):
+        for c, val in enumerate(row):
+            if c < num_cols:
+                cell = table.cell(r + 1, c)
+                cell.text = str(val)
+                cell.text_frame.paragraphs[0].font.color.rgb = hex_to_rgb(sub_col)
+                cell.fill.solid()
+                row_bg = shape_bg if r % 2 == 0 else "111827"
+                cell.fill.fore_color.rgb = hex_to_rgb(row_bg)
+
+
+def build_default_slide(slide, data, theme):
+    """
+    Standard text slide:
+    - Title, optional subtitle, bullet list
+    """
+    accent   = theme_color(theme, "accent",    "7C3AED")
+    txt_col  = theme_color(theme, "textColor", "FFFFFF")
+    sub_col  = "A0A8BE"
+
+    title = data.get("title", "")
+    add_text_box(slide, title, CONTENT_X, TITLE_Y, CONTENT_W, TITLE_H,
+                 24, txt_col, bold=True)
+
+    # Accent underline
+    add_rectangle(slide, CONTENT_X, TITLE_Y + TITLE_H, CONTENT_W * 0.35, 0.04, accent)
+
+    subtitle    = data.get("subtitle", "")
+    current_y   = BODY_Y + 0.05
+    bullet_height = BODY_H - 0.1
+
+    if subtitle:
+        add_text_box(slide, subtitle, CONTENT_X, current_y, CONTENT_W, 0.55,
+                     14, txt_col, bold=True)
+        current_y   += 0.65
+        bullet_height -= 0.65
+
+    bullets = data.get("bullets", [])
+    if bullets:
+        add_bullets(slide, bullets,
+                    CONTENT_X, current_y, CONTENT_W, bullet_height,
+                    13, sub_col, prefix="• ", line_spacing_pt=18)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BACKGROUND ENGINE
+# ─────────────────────────────────────────────────────────────────────────────
 def apply_custom_background(slide, bg_data, prs):
-    bg_type = bg_data.get('type')
-    bg_value = bg_data.get('value', '')
-    
-    # 1. Background Fill
-    if bg_type == 'solid':
-        color_rgb = hex_to_rgb(bg_value)
+    bg_type  = bg_data.get("type")
+    bg_value = bg_data.get("value", "")
+
+    if bg_type == "solid":
         slide.background.fill.solid()
-        slide.background.fill.fore_color.rgb = color_rgb
-    
-    elif bg_type == 'image' and bg_value.startswith('data:image'):
+        slide.background.fill.fore_color.rgb = hex_to_rgb(bg_value.lstrip("#"))
+
+    elif bg_type == "image" and bg_value.startswith("data:image"):
         try:
-            head, data = bg_value.split(',', 1)
-            img_data = base64.b64decode(data)
-            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-            temp_file.write(img_data)
-            temp_file.close()
-            
-            # Add full-screen picture as background (send to back)
-            pic = slide.shapes.add_picture(temp_file.name, Inches(0), Inches(0), prs.slide_width, prs.slide_height)
-            os.remove(temp_file.name)
-            
-            # Move to back (z-order 0)
-            pic._element.addprevious(pic._element.getparent()[0])
+            _, enc = bg_value.split(",", 1)
+            img_data = base64.b64decode(enc)
+            tf = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+            tf.write(img_data)
+            tf.close()
+            pic = slide.shapes.add_picture(
+                tf.name, Inches(0), Inches(0), prs.slide_width, prs.slide_height)
+            os.remove(tf.name)
             pic._element.getparent().insert(0, pic._element)
         except Exception as e:
             print("Failed to set image background:", e)
-            
-    elif bg_type == 'gradient' and bg_value:
+
+    elif bg_type == "gradient" and bg_value:
         try:
-            # Simple gradient generator using Pillow
-            # e.g., 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)'
-            colors = re.findall(r'#([A-Fa-f0-9]{6})', bg_value)
+            colors = re.findall(r"#([A-Fa-f0-9]{6})", bg_value)
             if len(colors) >= 2:
                 c1 = hex_to_rgb(colors[0])
                 c2 = hex_to_rgb(colors[1])
-                
-                width = 1280
-                height = 720
-                img = Image.new('RGB', (width, height))
+                w, h = 1280, 720
+                img = Image.new("RGB", (w, h))
                 draw = ImageDraw.Draw(img)
-                
-                # Draw vertical gradient approximation for simplicity
-                for y in range(height):
-                    r = int(c1[0] + (c2[0] - c1[0]) * y / height)
-                    g = int(c1[1] + (c2[1] - c1[1]) * y / height)
-                    b = int(c1[2] + (c2[2] - c1[2]) * y / height)
-                    draw.line([(0, y), (width, y)], fill=(r, g, b))
-                
-                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-                img.save(temp_file.name)
-                temp_file.close()
-                
-                pic = slide.shapes.add_picture(temp_file.name, Inches(0), Inches(0), prs.slide_width, prs.slide_height)
-                os.remove(temp_file.name)
-                
-                pic._element.addprevious(pic._element.getparent()[0])
+                for y in range(h):
+                    r = int(c1[0] + (c2[0] - c1[0]) * y / h)
+                    g = int(c1[1] + (c2[1] - c1[1]) * y / h)
+                    b = int(c1[2] + (c2[2] - c1[2]) * y / h)
+                    draw.line([(0, y), (w, y)], fill=(r, g, b))
+                tf = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+                img.save(tf.name)
+                tf.close()
+                pic = slide.shapes.add_picture(
+                    tf.name, Inches(0), Inches(0), prs.slide_width, prs.slide_height)
+                os.remove(tf.name)
                 pic._element.getparent().insert(0, pic._element)
         except Exception as e:
             print("Failed to set gradient background:", e)
 
-    # 2. Overlay Logic
-    if bg_type in ['image', 'gradient'] and bg_data.get('overlayOpacity', 0) > 0:
-        overlay_color = bg_data.get('overlayColor', '#000000')
-        opacity = bg_data.get('overlayOpacity', 0.5)
-        
-        rect = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), prs.slide_width, prs.slide_height)
-        set_shape_color(rect, overlay_color.replace('#', ''))
-        rect.line.fill.background()
-        
-        # In PowerPoint, transparency is set on the fill format
-        # However, python-pptx doesn't expose transparency directly on solid fill without XML manipulation.
-        # We will use an XML hack to set alpha on the solid fill.
+    # Overlay
+    if bg_type in ["image", "gradient"] and bg_data.get("overlayOpacity", 0) > 0:
+        overlay_color = bg_data.get("overlayColor", "#000000").lstrip("#")
+        opacity = bg_data.get("overlayOpacity", 0.5)
+        rect = slide.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE,
+            Inches(0), Inches(0), prs.slide_width, prs.slide_height)
+        set_shape_fill(rect, overlay_color)
+        set_shape_no_line(rect)
         try:
-            fill = rect.fill
-            fill.solid()
-            # Alpha is 0-100000 (100% opaque = 100000, 0% = 0)
-            alpha_val = int((1.0 - opacity) * 100000)
-            
-            # The XML structure for solid fill with alpha:
-            # <a:solidFill> <a:srgbClr val="RRGGBB"> <a:alpha val="50000"/> </a:srgbClr> </a:solidFill>
             from pptx.oxml import parse_xml
-            alpha_xml = f'<a:alpha xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" val="{alpha_val}"/>'
-            
+            alpha_val = int((1.0 - opacity) * 100000)
+            alpha_xml = (f'<a:alpha xmlns:a="http://schemas.openxmlformats.org/'
+                         f'drawingml/2006/main" val="{alpha_val}"/>')
             srgbClr = rect.fill._xPr.solidFill.srgbClr
             if srgbClr is not None:
                 srgbClr.append(parse_xml(alpha_xml))
         except Exception as e:
             print("Transparency XML injection failed:", e)
-
-        # Move to back, but in front of background
-        rect._element.addprevious(rect._element.getparent()[1])
         rect._element.getparent().insert(1, rect._element)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# MAIN EXPORT ORCHESTRATOR
+# ─────────────────────────────────────────────────────────────────────────────
 def export_presentation(data, output_path, custom_bg=None):
     prs = Presentation()
-    
+
     slide_size = data.get("slideSize", "LAYOUT_16x9")
     if slide_size == "LAYOUT_4x3":
-        prs.slide_width = Inches(10.0)
+        prs.slide_width  = Inches(10.0)
         prs.slide_height = Inches(7.5)
     elif slide_size == "LAYOUT_16x10":
-        prs.slide_width = Inches(12.0)
+        prs.slide_width  = Inches(12.0)
         prs.slide_height = Inches(7.5)
-    else: # LAYOUT_16x9
-        prs.slide_width = Inches(13.333)
+    else:
+        prs.slide_width  = Inches(13.333)
         prs.slide_height = Inches(7.5)
-    
-    # We use a completely blank layout (typically layout 6 in default template)
-    blank_slide_layout = prs.slide_layouts[6]
-    
-    theme = data.get("theme", {
-        "bkgd": "FFFFFF", "titleColor": "000000", "textColor": "333333", 
-        "accent": "3B82F6", "shapeFill": "F3F4F6"
-    })
-    
-    raw_slides = apply_defensive_fallbacks(data.get("slides", []))
-    slides_data = optimize_presentation(raw_slides)
-    
-    # Track temp images to clean up
-    temp_images = []
-    
-    for sdata in slides_data:
-        slide = prs.slides.add_slide(blank_slide_layout)
-        if custom_bg:
-            apply_custom_background(slide, custom_bg, prs)
-        else:
-            # Default Background
-            background = slide.background
-            fill = background.fill
-            fill.solid()
-            fill.fore_color.rgb = hex_to_rgb(theme.get('bkgd', '000000'))
-        
-        stype = sdata.get("slide_type", "default")
-        img_path = None
-        
-        if sdata.get("image_base64"):
-            img_path = save_base64_image(sdata["image_base64"])
-            temp_images.append(img_path)
-            
-        if stype == "comparison":
-            build_comparison_slide(slide, sdata, theme, img_path)
-        elif stype == "two_column_image" or stype == "hero_split" or stype == "title_hero":
-            build_split_card_slide(slide, sdata, theme, img_path)
-        elif stype == "timeline":
-            build_timeline_slide(slide, sdata, theme, img_path)
-        elif stype == "stat_callout":
-            build_stat_slide(slide, sdata, theme, img_path)
-        elif stype == "grid_list":
-            build_grid_slide(slide, sdata, theme, img_path)
-        elif stype == "chart_pie":
-            build_chart_slide(slide, sdata, theme, img_path, "pie")
-        elif stype == "chart_bar":
-            build_chart_slide(slide, sdata, theme, img_path, "bar")
-        elif stype == "data_table":
-            build_data_table_slide(slide, sdata, theme, img_path)
-        elif stype == "bento_grid":
-            build_bento_grid_slide(slide, sdata, theme, img_path)
-        elif stype == "metric_dashboard":
-            build_metric_dashboard_slide(slide, sdata, theme, img_path)
-        else:
-            build_default_slide(slide, sdata, theme, img_path)
-            
-    prs.save(output_path)
-    
-    # Cleanup temp images
-    for p in temp_images:
-        if os.path.exists(p):
-            os.remove(p)
 
+    blank_layout = prs.slide_layouts[6]
+
+    theme = data.get("theme", {
+        "bkgd": "0B0F19", "titleColor": "FFFFFF", "textColor": "FFFFFF",
+        "accent": "7C3AED", "shapeFill": "1A1A2E"
+    })
+    bkgd_color = theme_color(theme, "bkgd", "0B0F19")
+
+    raw_slides   = apply_defensive_fallbacks(data.get("slides", []))
+    slides_data  = optimize_presentation(raw_slides)
+    temp_images  = []
+
+    try:
+        for sdata in slides_data:
+            slide = prs.slides.add_slide(blank_layout)
+            # Remove any inherited placeholder shapes from the master
+            purge_placeholders(slide)
+
+            # ── Background ─────────────────────────────────────────────────────
+            # Prefer the CLI --custom_bg arg; fall back to customBackground in JSON
+            effective_bg = custom_bg or data.get("customBackground")
+            if effective_bg:
+                apply_custom_background(slide, effective_bg, prs)
+            else:
+                slide.background.fill.solid()
+                slide.background.fill.fore_color.rgb = hex_to_rgb(bkgd_color)
+
+            # ── Image ──────────────────────────────────────────────────────────
+            img_path = None
+            if sdata.get("image_base64"):
+                img_path = save_base64_image(sdata["image_base64"])
+                temp_images.append(img_path)
+
+            # ── Route to builder ───────────────────────────────────────────────
+            stype = sdata.get("slide_type", "default")
+
+            if stype == "title_hero":
+                build_title_hero_slide(slide, sdata, theme)
+            elif stype == "comparison":
+                build_comparison_slide(slide, sdata, theme)
+            elif stype == "bento_grid":
+                build_bento_grid_slide(slide, sdata, theme)
+            elif stype == "timeline":
+                build_timeline_slide(slide, sdata, theme)
+            elif stype == "stat_callout":
+                build_stat_callout_slide(slide, sdata, theme)
+            elif stype == "grid_list":
+                build_grid_list_slide(slide, sdata, theme)
+            elif stype == "three_card_grid":
+                build_three_card_grid_slide(slide, sdata, theme)
+            elif stype == "metric_dashboard":
+                build_metric_dashboard_slide(slide, sdata, theme)
+            elif stype in ("two_column_image", "hero_split"):
+                build_split_card_slide(slide, sdata, theme, img_path)
+            elif stype == "chart_pie":
+                build_chart_slide(slide, sdata, theme, "pie")
+            elif stype == "chart_bar":
+                build_chart_slide(slide, sdata, theme, "bar")
+            elif stype == "data_table":
+                build_data_table_slide(slide, sdata, theme)
+            else:
+                build_default_slide(slide, sdata, theme)
+
+        prs.save(output_path)
+    finally:
+        for p in temp_images:
+            if os.path.exists(p):
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CLI ENTRY POINT
+# ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", required=True, help="Input JSON file path")
-    parser.add_argument("--output", required=True, help="Output PPTX file path")
-
+    parser.add_argument("--input",     required=True, help="Input JSON file path")
+    parser.add_argument("--output",    required=True, help="Output PPTX file path")
     parser.add_argument("--custom_bg", required=False, help="Custom Background JSON string")
-
     args = parser.parse_args()
-    
+
     with open(args.input, "r") as f:
         data = json.load(f)
-        
+
     custom_bg_obj = None
     if args.custom_bg:
         custom_bg_obj = json.loads(args.custom_bg)
-        
+
     export_presentation(data, args.output, custom_bg_obj)
     print("SUCCESS")

@@ -112,7 +112,10 @@ async function generatePptx(slides, title, themeName, slideSize, customThemeObj,
             args.push('--custom_bg', JSON.stringify(customBgObj));
         }
         
-        const pythonProcess = spawn(path.join(__dirname, '..', 'venv', 'bin', 'python3'), args);
+        const venvPython = path.join(__dirname, '..', 'venv', 'bin', 'python3');
+        const pythonBin = fs.existsSync(venvPython) ? venvPython : (process.env.PYTHON_PATH || 'python3');
+        
+        const pythonProcess = spawn(pythonBin, args);
         
         pythonProcess.stdout.on('data', (data) => {
             console.log(`Python Exporter: ${data}`);
@@ -122,29 +125,42 @@ async function generatePptx(slides, title, themeName, slideSize, customThemeObj,
             console.error(`Python Exporter Error: ${data}`);
         });
         
+        pythonProcess.on('error', (err) => {
+            if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+            if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+            reject(new Error(`Failed to start python process: ${err.message}`));
+        });
+
         pythonProcess.on('close', (code) => {
-            if (code !== 0) {
+            const cleanup = () => {
                 if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+                if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+            };
+
+            if (code !== 0) {
+                cleanup();
                 return reject(new Error(`Python process exited with code ${code}`));
             }
             
             try {
                 const buffer = fs.readFileSync(outputPath);
-                fs.unlinkSync(inputPath);
-                fs.unlinkSync(outputPath);
+                cleanup();
                 resolve(buffer);
             } catch (err) {
+                cleanup();
                 reject(err);
             }
         });
     });
 }
 
-const { default: Automizer, modify } = require('pptx-automizer');
+const AutomizerLib = require('pptx-automizer');
+const Automizer = AutomizerLib.default || AutomizerLib;
+const modify = AutomizerLib.modify;
 
 async function generateFromTemplate(slides, title, templatePath) {
     const outputDir = path.join(__dirname, '..', 'temp');
-    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
+    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
     
     const automizer = new Automizer({
         templateDir: path.dirname(templatePath),
@@ -159,11 +175,6 @@ async function generateFromTemplate(slides, title, templatePath) {
         let slideIndex = slideData.layout_type === "Title Slide" ? 1 : 2;
         
         pres.addSlide('master', slideIndex, (slide) => {
-            // We use standard shape names (Title 1, Content Placeholder 2)
-            // Or we just try to replace text in any matching shape.
-            // A more generic approach is to instruct users to name their shapes "Title" and "Content"
-            // or use placeholders. pptx-automizer handles modifyElement silently if shape not found.
-            
             slide.modifyElement('Title 1', [ modify.setText(slideData.title || '') ]);
             slide.modifyElement('Title 2', [ modify.setText(slideData.title || '') ]);
             slide.modifyElement('Title', [ modify.setText(slideData.title || '') ]);
@@ -178,11 +189,15 @@ async function generateFromTemplate(slides, title, templatePath) {
     });
 
     const outputPath = path.join(outputDir, `output_${Date.now()}.pptx`);
-    await pres.write(path.basename(outputPath));
-    
-    const buffer = fs.readFileSync(outputPath);
-    fs.unlinkSync(outputPath);
-    return buffer;
+    try {
+        await pres.write(path.basename(outputPath));
+        const buffer = fs.readFileSync(outputPath);
+        return buffer;
+    } finally {
+        if (fs.existsSync(outputPath)) {
+            fs.unlinkSync(outputPath);
+        }
+    }
 }
 
 module.exports = {
