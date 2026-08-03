@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import HomePage from './components/HomePage';
 import CreationLauncher from './components/CreationLauncher';
+import PasteTextLauncher from './components/PasteTextLauncher';
 import WizardForm from './components/WizardForm';
 import Workspace from './components/Workspace';
 import HistoryPanel from './components/HistoryPanel';
@@ -25,8 +26,8 @@ function App() {
       .catch(e => console.error("Discovery failed", e));
   }, []);
   
-  // Navigation: 'home' | 'create' | 'wizard' | 'workspace'
-  const [view, setView] = useState('create');
+  // Navigation: 'home' | 'create' | 'paste' | 'wizard' | 'workspace'
+  const [view, setView] = useState('paste');
 
   const [slidesJson, setSlidesJson] = useState(null);
   const [title, setTitle] = useState('');
@@ -59,8 +60,10 @@ function App() {
   const handleSelectMode = (modeId) => {
     if (modeId === 'template') {
       setView('wizard');
+    } else if (modeId === 'paste') {
+      setView('paste');
     } else {
-      // 'generate', 'paste', 'import' all go to creation launcher
+      // 'generate', 'import' → creation launcher
       setView('create');
     }
   };
@@ -77,7 +80,7 @@ function App() {
       const response = await axios.post('http://localhost:3000/api/generate-json', {
         ...formData,
         baseUrl: settings.baseUrl,
-        model: settings.model
+        model: formData.model || settings.model
       });
       setSlidesJson(response.data.slides);
       setTitle(response.data.title);
@@ -217,6 +220,14 @@ function App() {
               onGenerate={handleGenerateJson} 
               isGenerating={isGenerating} 
               baseUrl={settings.baseUrl}
+              onBack={() => setView('home')}
+            />
+        )}
+
+        {view === 'paste' && (
+            <PasteTextLauncher
+              onGenerate={handleGenerateJson}
+              isGenerating={isGenerating}
               onBack={() => setView('home')}
             />
         )}
