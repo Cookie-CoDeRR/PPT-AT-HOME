@@ -26,7 +26,7 @@ function App() {
   }, []);
   
   // Navigation: 'home' | 'create' | 'wizard' | 'workspace'
-  const [view, setView] = useState('home');
+  const [view, setView] = useState('create');
 
   const [slidesJson, setSlidesJson] = useState(null);
   const [title, setTitle] = useState('');
@@ -216,7 +216,8 @@ function App() {
             <CreationLauncher 
               onGenerate={handleGenerateJson} 
               isGenerating={isGenerating} 
-              baseUrl={settings.baseUrl} 
+              baseUrl={settings.baseUrl}
+              onBack={() => setView('home')}
             />
         )}
 
