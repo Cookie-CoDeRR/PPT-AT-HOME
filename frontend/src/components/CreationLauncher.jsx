@@ -14,7 +14,7 @@ const CONTENT_TYPES = [
   { id: 'presentation', label: 'Presentation', icon: LayoutTemplate },
   { id: 'webpage',      label: 'Webpage',       icon: Globe },
   { id: 'document',     label: 'Document',       icon: FileText },
-  { id: 'social',       label: 'Social',         icon: Share2,         soon: true },
+  { id: 'social',       label: 'Social',         icon: Share2 },
   { id: 'graphic',      label: 'Graphic',        icon: ImageIcon,      badge: 'NEW', soon: true },
 ];
 
@@ -66,6 +66,17 @@ const DOCUMENT_PROMPTS = [
   { icon: '🐈', text: 'Buzzfeed-style article: \'10 Weird Facts About Cats\'' },
   { icon: '📝', text: 'Employee onboarding handbook for a remote-first startup' },
   { icon: '📊', text: 'Q3 Financial performance report and Q4 forecast' },
+];
+
+const SOCIAL_PROMPTS = [
+  { icon: '🤝', text: '5 unconventional ways to land clients (tested on 100+ freelancers)' },
+  { icon: '🧠', text: 'Marketing psychology hacks that feel illegal (but aren\'t)' },
+  { icon: '🔋', text: '3 signs you\'re suffering from burnout (and what to do about it)' },
+  { icon: '🖼️', text: 'Thumbnail secrets that doubled my click-through rate' },
+  { icon: '👥', text: '3 tips for creators losing motivation' },
+  { icon: '✍️', text: 'Copywriting 101: The Good, The Bad, and The Cringe-worthy' },
+  { icon: '📱', text: 'How the Instagram algorithm actually works in 2026' },
+  { icon: '🧵', text: 'A viral Twitter thread formula that works every time' },
 ];
 
 function getRandomSix(pool) {
@@ -132,15 +143,21 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
   const getPromptsPool = (type) => {
     if (type === 'webpage') return WEBPAGE_PROMPTS;
     if (type === 'document') return DOCUMENT_PROMPTS;
+    if (type === 'social') return SOCIAL_PROMPTS;
     return PPT_PROMPTS;
   };
   
   const currentPromptsPool = getPromptsPool(contentType);
   const [examplePrompts, setExamplePrompts] = useState(() => getRandomSix(currentPromptsPool));
 
-  // Update prompts when content type changes
+  // Update prompts and orientation when content type changes
   useEffect(() => {
     setExamplePrompts(getRandomSix(getPromptsPool(contentType)));
+    if (contentType === 'social') {
+      setOrientation('LAYOUT_9x16'); // Social defaults to Portrait
+    } else if (contentType === 'presentation') {
+      setOrientation('LAYOUT_16x9'); // Presentation defaults to Landscape
+    }
   }, [contentType]);
 
   const [activeModel, setActiveModel] = useState('deepseek-coder-v2-lite-instruct-mlx');
@@ -212,8 +229,8 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
       templateType: 'default',
       density: 'Detailed',
       includeImages: true,
-      slideSize: contentType === 'presentation' ? orientation : (contentType === 'document' ? docSize : undefined),
-      language: (contentType === 'webpage' || contentType === 'document') ? language : undefined,
+      slideSize: (contentType === 'presentation' || contentType === 'social') ? orientation : (contentType === 'document' ? docSize : undefined),
+      language: (contentType === 'webpage' || contentType === 'document' || contentType === 'social') ? language : undefined,
       referenceImage: referenceImage?.data,
       model: activeModel,
       temperature: 0.6,
@@ -316,6 +333,30 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
               value={tone.split('/')[0]}
               options={TONES}
               onChange={setTone}
+            />
+          </>
+        ) : contentType === 'social' ? (
+          <>
+            <PillDropdown
+              label="Slides"
+              value={slideCount}
+              options={SLIDE_COUNTS}
+              onChange={v => setSlideCount(Number(v))}
+            />
+            <PillDropdown
+              value={theme}
+              options={THEMES}
+              onChange={setTheme}
+            />
+            <PillDropdown
+              value={orientationLabel}
+              options={ORIENTATIONS}
+              onChange={setOrientation}
+            />
+            <PillDropdown
+              value={language}
+              options={LANGUAGES}
+              onChange={setLanguage}
             />
           </>
         ) : contentType === 'webpage' ? (
