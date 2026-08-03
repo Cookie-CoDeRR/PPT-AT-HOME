@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import HomePage from './components/HomePage';
 import CreationLauncher from './components/CreationLauncher';
+import PasteTextLauncher from './components/PasteTextLauncher';
 import WizardForm from './components/WizardForm';
 import Workspace from './components/Workspace';
 import HistoryPanel from './components/HistoryPanel';
@@ -59,8 +60,10 @@ function App() {
   const handleSelectMode = (modeId) => {
     if (modeId === 'template') {
       setView('wizard');
+    } else if (modeId === 'paste') {
+      setView('paste');
     } else {
-      // 'generate', 'paste', 'import' all go to creation launcher
+      // 'generate', 'import' → creation launcher
       setView('create');
     }
   };
@@ -217,6 +220,14 @@ function App() {
               onGenerate={handleGenerateJson} 
               isGenerating={isGenerating} 
               baseUrl={settings.baseUrl}
+              onBack={() => setView('home')}
+            />
+        )}
+
+        {view === 'paste' && (
+            <PasteTextLauncher
+              onGenerate={handleGenerateJson}
+              isGenerating={isGenerating}
               onBack={() => setView('home')}
             />
         )}
