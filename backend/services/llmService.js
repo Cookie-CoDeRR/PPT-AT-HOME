@@ -1,5 +1,6 @@
 const OpenAI = require('openai');
 const { getBlueprint } = require('./layoutRouter');
+const { generateImage } = require('./imageService');
 
 const LAYOUT_SCHEMAS = {
     "title_hero": '{\n      "slide_number": __SLIDE_NUM__,\n      "slide_type": "title_hero",\n      "slide_category": "...",\n      "title": "...",\n      "subtitle": "..."\n    }',
@@ -21,10 +22,27 @@ const LAYOUT_SCHEMAS = {
 
 let previousLayoutSequence = [];
 
-async function generateJsonSlides(prompt, slideCount, tone, baseUrl, modelName, contextText = "", density = "Detailed", includeImages = false, referenceImage = null, temperature = 0.6) {
+async function generateJsonSlides(prompt, slideCount, tone, baseUrl, modelName, contextText = "", density = "Detailed", includeImages = false, referenceImage = null, temperature = 0.6, contentType = "presentation", language = "English", slideSize = "", graphicStyle = "", graphicCount = 1, graphicQuality = "Standard") {
     let finalBaseUrl = baseUrl || 'http://127.0.0.1:1234/v1';
     if (!finalBaseUrl.endsWith('/v1') && !finalBaseUrl.endsWith('/api')) {
         finalBaseUrl = finalBaseUrl.replace(/\/$/, '') + '/v1';
+    }
+
+    if (contentType === 'graphic') {
+        const generatedSlides = [];
+        for (let i = 0; i < graphicCount; i++) {
+            const imageUrl = await generateImage(prompt, graphicStyle, graphicQuality, slideSize);
+            generatedSlides.push({
+                slide_number: i + 1,
+                slide_type: "graphic_result",
+                title: "Generated Graphic " + (i + 1),
+                image_url: imageUrl
+            });
+        }
+        return {
+            title: "Generated Graphics",
+            slides: generatedSlides
+        };
     }
 
     const openai = new OpenAI({
@@ -49,17 +67,27 @@ async function generateJsonSlides(prompt, slideCount, tone, baseUrl, modelName, 
     });
     const combinedSchemas = slideSchemasArray.join(',\n    ');
 
-    let systemPrompt = `You are an expert presentation data architect. Your task is to generate a highly engaging PowerPoint outline.
+    let contentSpecificInstruction = `You are an expert presentation data architect. Your task is to generate a highly engaging PowerPoint outline.`;
+    if (contentType === 'webpage') {
+        contentSpecificInstruction = `You are an expert web designer. Your task is to generate a single continuous JSON object representing a webpage (e.g. hero section, features, footer). Map these "sections" into the provided schema.`;
+    } else if (contentType === 'document') {
+        contentSpecificInstruction = `You are an expert document formatter. Your task is to generate a document structure (e.g. headers, paragraphs, lists) rather than presentation slides. Map these "pages" into the provided schema.`;
+    } else if (contentType === 'social') {
+        contentSpecificInstruction = `You are a social media strategist. Your task is to generate highly engaging, concise, vertical format content (e.g., carousel posts, threads). Map these "posts" into the provided schema.`;
+    }
+
+    let systemPrompt = `${contentSpecificInstruction}
 Tone: ${tone}
-Number of Slides: ${slideCount}
+Number of Slides/Sections: ${slideCount}
 Content Density: ${density}
+Language: ${language}
 
 You MUST structure your JSON output to perfectly match the following layout sequence: ${blueprintString}.
 Slide 1 MUST be ${blueprint[0]}, Slide 2 MUST be ${blueprint[1]}, etc. Do NOT change this order. Fill the content based on the user's topic.
 
 CRITICAL SYSTEM DIRECTIVES:
 ${antiRepetitionRule}
-2. DATA VISUALIZATION MANDATE: You must include at least one bento_grid, chart_pie, or data_table in every presentation.
+2. DATA VISUALIZATION MANDATE: You must include at least one bento_grid, chart_pie, or data_table in every generation (if applicable).
 3. SLIDE CATEGORY: Every slide MUST include a "slide_category" field. Choose one:
    - "title_hero": For intros and transitions (Max 20 words total).
    - "informational": For text-heavy explanations, bullets, and comparisons (Max 60 words total).
@@ -68,7 +96,7 @@ ${antiRepetitionRule}
 ${includeImages ? '\nCRITICAL INSTRUCTION: You MUST include an "image_search_query" field for EACH slide containing a 5-6 word descriptive query for a stock photo.' : ''}
 ${contextText ? `Use the following extracted document context:\n---\n${contextText}\n---\n\n` : ''}You MUST return a JSON object with this EXACT schema, matching the fields to the chosen slide_type:
 {
-  "title": "Main presentation title",
+  "title": "Main title",
   "slides": [
     ${combinedSchemas}
   ]
@@ -132,6 +160,27 @@ DO NOT wrap your response in markdown code blocks. Return ONLY valid, parseable 
             previousLayoutSequence = generatedSequence;
             if (parsedData && parsedData.slides && Array.isArray(parsedData.slides)) {
                 parsedData.slides = postProcessSlides(parsedData.slides);
+
+                // --- CONCURRENT IMAGE GENERATION PIPELINE ---
+                const imagePromises = [];
+                parsedData.slides.forEach(slide => {
+                    let promptToGenerate = slide.image_prompt || slide.image_search_query;
+                    if (promptToGenerate) {
+                        imagePromises.push(
+                            generateImage(promptToGenerate, graphicStyle, graphicQuality, slideSize)
+                                .then(url => { 
+                                    slide.image_url = url; 
+                                    delete slide.image_prompt; 
+                                    delete slide.image_search_query; 
+                                })
+                        );
+                    }
+                });
+                
+                if (imagePromises.length > 0) {
+                    await Promise.all(imagePromises);
+                }
+                // ---------------------------------------------
             }
             return parsedData;
             
@@ -163,7 +212,7 @@ function postProcessSlides(slides) {
     return slides;
 }
 
-async function generateIncrementalSlide(contextText, userInstruction, baseUrl, modelName) {
+async function generateIncrementalSlide(contextText, userInstruction, baseUrl, modelName, contentType = "presentation") {
     let finalBaseUrl = baseUrl || 'http://127.0.0.1:1234/v1';
     if (!finalBaseUrl.endsWith('/v1') && !finalBaseUrl.endsWith('/api')) {
         finalBaseUrl = finalBaseUrl.replace(/\/$/, '') + '/v1';
@@ -174,10 +223,15 @@ async function generateIncrementalSlide(contextText, userInstruction, baseUrl, m
         apiKey: 'local',
     });
 
-    const systemPrompt = `You are an assistant extending an existing presentation deck. 
+    let roleDescription = "extending an existing presentation deck";
+    if (contentType === 'webpage') roleDescription = "extending an existing webpage layout with a new section";
+    if (contentType === 'document') roleDescription = "extending an existing document with a new section/page";
+    if (contentType === 'social') roleDescription = "extending an existing social media carousel with a new post";
+
+    const systemPrompt = `You are an assistant ${roleDescription}. 
 Review the deck_context array to understand what has already been covered. 
-Generate ONLY ONE new slide object in JSON matching the requested user instruction. 
-Do not repeat the layout type of the previous slide.
+Generate ONLY ONE new section/slide object in JSON matching the requested user instruction. 
+Do not repeat the layout type of the previous section.
 Supported slide_types: comparison, timeline, stat_callout, grid_list, default.
 
 Return ONLY a single valid JSON object representing the new slide matching the appropriate schema for its slide_type. DO NOT return an array, just the object.
