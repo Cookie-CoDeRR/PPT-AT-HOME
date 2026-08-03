@@ -1,5 +1,6 @@
-# Local AI PowerPoint Generator
+# PPT-AT-HOME (Local AI PowerPoint Generator)
 
+A clone of online available service named "Gamma" for local ppt generation.
 This full-stack application allows you to generate professional PowerPoint (.pptx) presentations using a local LLM via Ollama or LM Studio.
 
 ## Architecture
