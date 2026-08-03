@@ -12,13 +12,16 @@ import axios from 'axios';
 
 const CONTENT_TYPES = [
   { id: 'presentation', label: 'Presentation', icon: LayoutTemplate },
-  { id: 'webpage',      label: 'Webpage',       icon: Globe,          soon: true },
+  { id: 'webpage',      label: 'Webpage',       icon: Globe },
   { id: 'document',     label: 'Document',       icon: FileText,       soon: true },
   { id: 'social',       label: 'Social',         icon: Share2,         soon: true },
   { id: 'graphic',      label: 'Graphic',        icon: ImageIcon,      badge: 'NEW', soon: true },
 ];
 
 const SLIDE_COUNTS = [5, 8, 10, 12, 15];
+const SECTION_COUNTS = [3, 5, 8, 10, 12];
+const LANGUAGES = ['English (UK)', 'English (US)', 'Spanish', 'French', 'German'];
+
 const THEMES = ['Modern Dark Tech', 'Classic', 'Editorial Serif', 'Vibrant Startup', 'Corporate Pro', 'Elegant Dark'];
 const ORIENTATIONS = [
   { label: 'Landscape (16:9)', value: 'LAYOUT_16x9' },
@@ -27,7 +30,7 @@ const ORIENTATIONS = [
 ];
 const TONES = ['Professional/Corporate', 'Academic', 'Creative', 'Casual'];
 
-const ALL_PROMPTS = [
+const PPT_PROMPTS = [
   { icon: '📈', text: 'Marketing psychology hacks that feel illegal (but aren\'t)' },
   { icon: '🏋️', text: 'Gym personalities that make everyone uncomfortable' },
   { icon: '📚', text: '4 study habits that got me straight A\'s (and 2 that almost failed me)' },
@@ -40,6 +43,17 @@ const ALL_PROMPTS = [
   { icon: '🌐', text: 'The future of remote work: data from 10,000 companies' },
   { icon: '🔬', text: 'AI tools replacing entire job roles by 2026' },
   { icon: '📊', text: 'The science of viral content: what the data actually says' },
+];
+
+const WEBPAGE_PROMPTS = [
+  { icon: '👨‍💼', text: 'Landing page for a healthcare consultant offering process improvement solutions for hospitals and clinics' },
+  { icon: '✍️', text: 'Portfolio website for a freelance writer' },
+  { icon: '📦', text: 'Landing page for [product]' },
+  { icon: '☕', text: 'One-page website promoting a dog cafe' },
+  { icon: '🎨', text: 'Personal site for a product designer' },
+  { icon: '📱', text: 'Landing page for a mobile app that helps users learn a new language' },
+  { icon: '🏢', text: 'Corporate homepage for a B2B SaaS startup' },
+  { icon: '🍕', text: 'Website for a local artisan pizzeria' },
 ];
 
 function getRandomSix(pool) {
@@ -100,7 +114,15 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
   const [theme, setTheme] = useState('Classic');
   const [orientation, setOrientation] = useState('LAYOUT_16x9');
   const [tone, setTone] = useState('Professional/Corporate');
-  const [examplePrompts, setExamplePrompts] = useState(() => getRandomSix(ALL_PROMPTS));
+  const [language, setLanguage] = useState('English (UK)');
+  
+  const currentPromptsPool = contentType === 'webpage' ? WEBPAGE_PROMPTS : PPT_PROMPTS;
+  const [examplePrompts, setExamplePrompts] = useState(() => getRandomSix(currentPromptsPool));
+
+  // Update prompts when content type changes
+  useEffect(() => {
+    setExamplePrompts(getRandomSix(contentType === 'webpage' ? WEBPAGE_PROMPTS : PPT_PROMPTS));
+  }, [contentType]);
 
   const [activeModel, setActiveModel] = useState('deepseek-coder-v2-lite-instruct-mlx');
   const [availableModels, setAvailableModels] = useState(['deepseek-coder-v2-lite-instruct-mlx']);
@@ -163,6 +185,7 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
     if (!prompt.trim() || isGenerating || activeModel === '⚠️ No Models Loaded') return;
     onGenerate({
       prompt,
+      contentType,
       slideCount,
       tone,
       theme: theme === 'Classic' ? 'Modern Dark Tech' : theme,
@@ -171,6 +194,7 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
       density: 'Detailed',
       includeImages: true,
       slideSize: orientation,
+      language: contentType === 'webpage' ? language : undefined,
       referenceImage: referenceImage?.data,
       model: activeModel,
       temperature: 0.6,
@@ -251,27 +275,45 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
         transition={{ delay: 0.12 }}
         className="flex items-center gap-2 mb-5 flex-wrap justify-center"
       >
-        <PillDropdown
-          label="Slides"
-          value={slideCount}
-          options={SLIDE_COUNTS}
-          onChange={v => setSlideCount(Number(v))}
-        />
-        <PillDropdown
-          value={theme}
-          options={THEMES}
-          onChange={setTheme}
-        />
-        <PillDropdown
-          value={orientationLabel}
-          options={ORIENTATIONS}
-          onChange={setOrientation}
-        />
-        <PillDropdown
-          value={tone.split('/')[0]}
-          options={TONES}
-          onChange={setTone}
-        />
+        {contentType === 'presentation' ? (
+          <>
+            <PillDropdown
+              label="Slides"
+              value={slideCount}
+              options={SLIDE_COUNTS}
+              onChange={v => setSlideCount(Number(v))}
+            />
+            <PillDropdown
+              value={theme}
+              options={THEMES}
+              onChange={setTheme}
+            />
+            <PillDropdown
+              value={orientationLabel}
+              options={ORIENTATIONS}
+              onChange={setOrientation}
+            />
+            <PillDropdown
+              value={tone.split('/')[0]}
+              options={TONES}
+              onChange={setTone}
+            />
+          </>
+        ) : (
+          <>
+            <PillDropdown
+              label="Sections"
+              value={slideCount}
+              options={SECTION_COUNTS}
+              onChange={v => setSlideCount(Number(v))}
+            />
+            <PillDropdown
+              value={language}
+              options={LANGUAGES}
+              onChange={setLanguage}
+            />
+          </>
+        )}
 
         {/* Model pill */}
         <div className="relative">
@@ -401,7 +443,7 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
         {/* Shuffle */}
         <div className="flex justify-center">
           <button
-            onClick={() => setExamplePrompts(getRandomSix(ALL_PROMPTS))}
+            onClick={() => setExamplePrompts(getRandomSix(currentPromptsPool))}
             className="flex items-center gap-2 px-5 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-sm text-gray-400 hover:text-white transition-all font-medium"
           >
             <Shuffle className="w-4 h-4" />
