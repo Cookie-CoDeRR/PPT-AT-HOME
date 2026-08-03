@@ -196,7 +196,7 @@ function App() {
         </div>
       </header>
 
-      <main className="w-full h-[calc(100vh-73px)] relative overflow-y-auto flex items-center justify-center">
+      <main className="w-full h-[calc(100vh-73px)] relative overflow-y-auto overflow-x-hidden flex flex-col items-center">
         
         {/* Error Toast */}
         {error && (
