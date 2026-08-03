@@ -26,8 +26,8 @@ function App() {
       .catch(e => console.error("Discovery failed", e));
   }, []);
   
-  // Navigation: 'home' | 'create' | 'wizard' | 'workspace'
-  const [view, setView] = useState('create');
+  // Navigation: 'home' | 'create' | 'paste' | 'wizard' | 'workspace'
+  const [view, setView] = useState('paste');
 
   const [slidesJson, setSlidesJson] = useState(null);
   const [title, setTitle] = useState('');

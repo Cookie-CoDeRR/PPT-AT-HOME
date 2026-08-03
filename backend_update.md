@@ -6,10 +6,14 @@
 
 ## Summary of New Frontend Pages
 
+> [!IMPORTANT]
+> **`PasteTextLauncher.jsx` is now the default start/greeting page** — the first screen users see when the app loads (`view` starts as `'paste'` in `App.jsx`).
+
 | Page | Component | Route Trigger | Status |
 |------|-----------|--------------|--------|
+| **Paste in Text** ⭐ (Start Page) | `PasteTextLauncher.jsx` | **App default view** | 🆕 New — now the greeting page |
 | Generate (AI prompt) | `CreationLauncher.jsx` | Home → "Generate" | ✅ Existing, extended |
-| **Paste in Text** | `PasteTextLauncher.jsx` | Home → "Paste in text" | 🆕 New page |
+| Home | `HomePage.jsx` | Logo click / Back buttons | ✅ Existing |
 | Create from Template | `WizardForm.jsx` | Home → "Create from template" | ✅ Existing |
 | Workspace | `Workspace.jsx` | After generation | ✅ Existing |
 
