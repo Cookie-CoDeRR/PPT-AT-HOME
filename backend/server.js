@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { generateJsonSlides } = require('./services/llmService');
@@ -14,8 +15,11 @@ const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+const path = require('path');
+
 app.use(cors());
 app.use(express.json());
+app.use('/assets', express.static(path.join(__dirname, 'public', 'assets')));
 
 // Test Connection Endpoint
 // Models list Endpoint
@@ -133,9 +137,9 @@ app.post('/api/upload-context', upload.single('file'), async (req, res) => {
 // Generate JSON Slides Endpoint
 app.post('/api/generate-json', async (req, res) => {
     try {
-        const { prompt, slideCount, tone, baseUrl, model, useRag, theme, density, includeImages, referenceImage, temperature } = req.body;
+        const { prompt, slideCount, tone, baseUrl, model, useRag, theme, density, includeImages, referenceImage, temperature, contentType, language, slideSize, graphicStyle, graphicCount, graphicQuality } = req.body;
         
-        if (!prompt || !slideCount || !tone) {
+        if (!prompt || !tone) {
             return res.status(400).json({ error: "Missing required parameters" });
         }
 
@@ -146,7 +150,7 @@ app.post('/api/generate-json', async (req, res) => {
 
         const slidesJson = await generateJsonSlides(
             prompt, 
-            slideCount, 
+            slideCount || 1, 
             tone, 
             baseUrl, 
             model, 
@@ -154,7 +158,13 @@ app.post('/api/generate-json', async (req, res) => {
             density || "Detailed", 
             includeImages || false,
             referenceImage,
-            temperature || 0.6
+            temperature || 0.6,
+            contentType || "presentation",
+            language,
+            slideSize,
+            graphicStyle,
+            graphicCount,
+            graphicQuality
         );
         
         const presTheme = theme || "Modern Minimalist";
@@ -174,7 +184,7 @@ app.post('/api/generate-json', async (req, res) => {
 // Generate Incremental Slide Endpoint
 app.post('/api/generate-incremental', async (req, res) => {
     try {
-        const { contextText, instruction, baseUrl, model } = req.body;
+        const { contextText, instruction, baseUrl, model, contentType } = req.body;
         
         if (!contextText || !instruction) {
             return res.status(400).json({ error: "Missing context or instruction" });
@@ -186,7 +196,8 @@ app.post('/api/generate-incremental', async (req, res) => {
             contextText,
             instruction,
             baseUrl,
-            model
+            model,
+            contentType || 'presentation'
         );
         
         res.json({ slide: newSlide });
