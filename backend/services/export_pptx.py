@@ -19,6 +19,46 @@ from pptx.chart.data import CategoryChartData
 from pptx.enum.chart import XL_CHART_TYPE
 from pptx.enum.chart import XL_LEGEND_POSITION
 
+def apply_defensive_fallbacks(slides):
+    for slide in slides:
+        if not slide.get("title") or not str(slide.get("title")).strip():
+            slide["title"] = "Slide Content Missing"
+        
+        stype = slide.get("slide_type", "default")
+        
+        if stype in ["standard_text", "summary_takeaways", "stat_callout", "two_column_image", "default"]:
+            if not slide.get("bullets") or len(slide.get("bullets", [])) == 0:
+                slide["bullets"] = ["• Please update this content", "• The generator skipped these bullets"]
+                
+        elif stype == "comparison":
+            for col in ["column_left", "column_right"]:
+                if not slide.get(col): slide[col] = {}
+                if not slide[col].get("title"): slide[col]["title"] = "Missing Column"
+                if not slide[col].get("bullets") or len(slide[col].get("bullets", [])) == 0:
+                    slide[col]["bullets"] = ["• Missing data"]
+                    
+        elif stype == "timeline":
+            if not slide.get("steps") or len(slide.get("steps", [])) == 0:
+                slide["steps"] = [{"step": "Step 1", "text": "Missing data"}, {"step": "Step 2", "text": "Missing data"}]
+                
+        elif stype in ["grid_list", "bento_grid"]:
+            if not slide.get("items") or len(slide.get("items", [])) == 0:
+                slide["items"] = [{"item_title": "Missing Item", "item_text": "Missing data", "title": "Missing", "desc": "Missing data", "size": "small"}]
+                
+        elif stype == "metric_dashboard":
+            if not slide.get("metrics") or len(slide.get("metrics", [])) == 0:
+                slide["metrics"] = [{"label": "Missing", "value": "N/A", "change": "+0%"}]
+                
+        elif stype in ["chart_pie", "chart_bar"]:
+            if not slide.get("chart_data") or not slide["chart_data"].get("labels") or not slide["chart_data"].get("values"):
+                slide["chart_data"] = {"labels": ["Data A", "Data B"], "values": [50, 50]}
+                
+        elif stype == "data_table":
+            if not slide.get("table_data") or not slide["table_data"].get("headers") or not slide["table_data"].get("rows"):
+                slide["table_data"] = {"headers": ["Column 1", "Column 2"], "rows": [["N/A", "N/A"]]}
+                
+    return slides
+
 def hex_to_rgb(hex_str):
     hex_str = hex_str.lstrip('#')
     if not hex_str: return RGBColor(0, 0, 0)
@@ -516,7 +556,8 @@ def export_presentation(data, output_path, custom_bg=None):
         "accent": "3B82F6", "shapeFill": "F3F4F6"
     })
     
-    slides_data = optimize_presentation(data.get("slides", []))
+    raw_slides = apply_defensive_fallbacks(data.get("slides", []))
+    slides_data = optimize_presentation(raw_slides)
     
     # Track temp images to clean up
     temp_images = []

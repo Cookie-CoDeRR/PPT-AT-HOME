@@ -116,13 +116,63 @@ DO NOT wrap your response in markdown code blocks. Return ONLY valid, parseable 
     let currentPrompt = userMessageContent;
     
     while (retryCount <= 2) {
+        const schema = {
+            type: "json_schema",
+            json_schema: {
+                name: "presentation_blueprint",
+                strict: true,
+                schema: {
+                    type: "object",
+                    properties: {
+                        title: { type: "string" },
+                        slides: {
+                            type: "array",
+                            items: {
+                                type: "object",
+                                properties: {
+                                    slide_number: { type: "number" },
+                                    slide_type: { type: "string" },
+                                    slide_category: { type: "string" },
+                                    title: { type: "string" },
+                                    subtitle: { type: ["string", "null"] },
+                                    bullets: { type: ["array", "null"], items: { type: "string" }, description: "MUST contain at least 3 detailed bullet points if applicable." },
+                                    image_prompt: { type: ["string", "null"] },
+                                    image_search_query: { type: ["string", "null"] },
+                                    items: { type: ["array", "null"], items: { type: "object", properties: { size: { type: "string" }, title: { type: "string" }, desc: { type: "string" }, item_title: { type: "string" }, item_text: { type: "string" } }, required: [], additionalProperties: true } },
+                                    chart_data: { type: ["object", "null"], properties: { labels: { type: "array", items: { type: "string" } }, values: { type: "array", items: { type: "number" } } }, required: ["labels", "values"], additionalProperties: false },
+                                    table_data: { type: ["object", "null"], properties: { headers: { type: "array", items: { type: "string" } }, rows: { type: "array", items: { type: "array", items: { type: "string" } } } }, required: ["headers", "rows"], additionalProperties: false },
+                                    column_left: { type: ["object", "null"], properties: { title: { type: "string" }, bullets: { type: "array", items: { type: "string" } } }, required: ["title", "bullets"], additionalProperties: false },
+                                    column_right: { type: ["object", "null"], properties: { title: { type: "string" }, bullets: { type: "array", items: { type: "string" } } }, required: ["title", "bullets"], additionalProperties: false },
+                                    huge_text: { type: ["string", "null"] },
+                                    subtext: { type: ["string", "null"] },
+                                    stat: { type: ["string", "null"] },
+                                    label: { type: ["string", "null"] },
+                                    steps: { type: ["array", "null"], items: { type: "object", properties: { step: { type: "string" }, text: { type: "string" } }, required: ["step", "text"], additionalProperties: false } },
+                                    metrics: { type: ["array", "null"], items: { type: "object", properties: { label: { type: "string" }, value: { type: "string" }, change: { type: "string" } }, required: ["label", "value", "change"], additionalProperties: false } }
+                                },
+                                required: [
+                                    "slide_number", "slide_type", "slide_category", "title", "subtitle", "bullets", 
+                                    "image_prompt", "image_search_query", "items", "chart_data", "table_data", 
+                                    "column_left", "column_right", "huge_text", "subtext", "stat", "label", "steps", "metrics"
+                                ],
+                                additionalProperties: false
+                            }
+                        }
+                    },
+                    required: ["title", "slides"],
+                    additionalProperties: false
+                }
+            }
+        };
+
         const response = await openai.chat.completions.create({
             model: modelName || 'llama3.2',
             messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: currentPrompt }
             ],
-            temperature: 0.7
+            temperature: 0.7,
+            response_format: schema
         });
 
         if (!response || !response.choices || !response.choices[0]) {
