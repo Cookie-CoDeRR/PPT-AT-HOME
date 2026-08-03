@@ -14,6 +14,12 @@ const CONTENT_TYPES = [
   { id: 'graphic',      label: 'Graphic',        icon: ImageIcon, badge: 'NEW' },
 ];
 
+const DOCUMENT_SIZES   = ['Default', 'A4', 'US Letter'];
+const LANGUAGES        = ['English (UK)', 'English (US)', 'Spanish', 'French', 'German', 'Hindi', 'Japanese', 'Chinese'];
+const SLIDE_COUNTS     = [5, 8, 10, 12, 15];
+const SECTION_COUNTS   = [3, 5, 7, 10];
+const ORIENTATIONS     = ['Landscape (16:9)', 'Portrait (9:16)', 'Square (1:1)'];
+
 // ─── Generation Modes ─────────────────────────────────────────────────────────
 const GENERATION_MODES = [
   {
@@ -59,6 +65,20 @@ export default function PasteTextLauncher({ onGenerate, isGenerating, onBack }) 
   const [contentType, setContentType] = useState('presentation');
   const [text, setText] = useState('');
   const [mode, setMode] = useState('generate_outline');
+  const [docSize, setDocSize] = useState('Default');
+  const [language, setLanguage] = useState('English (UK)');
+  const [slideCount, setSlideCount] = useState(10);
+  const [orientation, setOrientation] = useState('Landscape (16:9)');
+
+  // Sub-option label and choices based on current contentType
+  const getSubOptions = () => {
+    if (contentType === 'document')     return { label: 'Document size', options: DOCUMENT_SIZES, value: docSize,      onChange: setDocSize };
+    if (contentType === 'webpage')      return { label: 'Language',      options: LANGUAGES,       value: language,     onChange: setLanguage };
+    if (contentType === 'social')       return { label: 'Language',      options: LANGUAGES,       value: language,     onChange: setLanguage };
+    if (contentType === 'presentation') return { label: 'Orientation',   options: ORIENTATIONS,    value: orientation,  onChange: setOrientation };
+    return null;
+  };
+  const subOpt = getSubOptions();
 
   const canContinue = text.trim().length > 10;
 
@@ -68,12 +88,14 @@ export default function PasteTextLauncher({ onGenerate, isGenerating, onBack }) 
       prompt: text,
       pasteMode: mode,
       contentType,
-      slideCount: 10,
+      slideCount,
       tone: 'Professional/Corporate',
       theme: 'Modern Dark Tech',
       templateType: 'default',
       density: 'Detailed',
       includeImages: true,
+      slideSize: contentType === 'document' ? docSize : (contentType === 'presentation' ? orientation : undefined),
+      language: (contentType === 'webpage' || contentType === 'document' || contentType === 'social') ? language : undefined,
     });
   };
 
@@ -112,7 +134,7 @@ export default function PasteTextLauncher({ onGenerate, isGenerating, onBack }) 
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.06 }}
-        className="flex items-center gap-1.5 flex-wrap justify-center mb-8"
+        className="flex items-center gap-1.5 flex-wrap justify-center mb-3"
       >
         {CONTENT_TYPES.map(ct => {
           const Icon = ct.icon;
@@ -141,6 +163,31 @@ export default function PasteTextLauncher({ onGenerate, isGenerating, onBack }) 
           );
         })}
       </motion.div>
+
+      {/* Sub-option dropdown (context-sensitive) */}
+      {subOpt && (
+        <motion.div
+          key={contentType}
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.15 }}
+          className="mb-6"
+        >
+          <div className="relative inline-flex items-center gap-2">
+            <span className="text-xs text-gray-500 mr-1">⇄</span>
+            <select
+              value={subOpt.value}
+              onChange={e => subOpt.onChange(e.target.value)}
+              className="appearance-none bg-white/5 border border-white/15 rounded-lg pl-3 pr-7 py-1.5 text-sm text-gray-300 outline-none cursor-pointer hover:bg-white/10 transition-colors focus:border-blue-500/40"
+            >
+              {subOpt.options.map(opt => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+            <svg className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+          </div>
+        </motion.div>
+      )}
 
       {/* Main two-column area */}
       <motion.div
