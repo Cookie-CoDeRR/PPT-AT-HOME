@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    /* Very dark slate background with subtle radial glow */
+    @apply text-gray-100 bg-[#0B0F17];
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.15) 0, transparent 50%), 
+      radial-gradient(at 100% 100%, rgba(217, 70, 239, 0.1) 0, transparent 50%);
+    background-attachment: fixed;
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+}
+
+.glass-panel {
+  @apply bg-white/5 backdrop-blur-xl border border-white/10 shadow-lg rounded-2xl;
+}
+
+.glass-input {
+  @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-xl focus:ring-1 focus:ring-violet-500 focus:border-violet-500 outline-none transition-all focus:bg-white/10 text-white placeholder-gray-500;
+}
+
+/* Gamma specific scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+[id^="slide-"] h2, [id^="slide-"] h3, [id^="slide-"] .text-8xl, [id^="slide-"] .text-9xl {
+  font-family: var(--header-font, inherit);
+}
