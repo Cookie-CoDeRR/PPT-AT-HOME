@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import HomePage from './components/HomePage';
 import CreationLauncher from './components/CreationLauncher';
+import WizardForm from './components/WizardForm';
 import Workspace from './components/Workspace';
 import HistoryPanel from './components/HistoryPanel';
 import SettingsPanel from './components/SettingsPanel';
 import axios from 'axios';
-import { Presentation, Loader2, Cloud, Download, History, Plus, Settings } from 'lucide-react';
+import { Presentation, Loader2, History, Settings } from 'lucide-react';
 
 function App() {
   const [settings, setSettings] = useState({
@@ -23,6 +25,9 @@ function App() {
       .catch(e => console.error("Discovery failed", e));
   }, []);
   
+  // Navigation: 'home' | 'create' | 'wizard' | 'workspace'
+  const [view, setView] = useState('create');
+
   const [slidesJson, setSlidesJson] = useState(null);
   const [title, setTitle] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -42,7 +47,7 @@ function App() {
   
   const [customBackground, setCustomBackground] = useState({
     type: 'solid',
-    value: '', // Hex code, CSS gradient, or base64 data URI
+    value: '',
     overlayColor: '#000000',
     overlayOpacity: 0.5
   });
@@ -50,6 +55,15 @@ function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [dbId, setDbId] = useState(null);
+
+  const handleSelectMode = (modeId) => {
+    if (modeId === 'template') {
+      setView('wizard');
+    } else {
+      // 'generate', 'paste', 'import' all go to creation launcher
+      setView('create');
+    }
+  };
 
   const handleGenerateJson = async (formData) => {
     setIsGenerating(true);
@@ -61,13 +75,14 @@ function App() {
     setSlideSize(formData.slideSize || 'LAYOUT_16x9');
     try {
       const response = await axios.post('http://localhost:3000/api/generate-json', {
-        ...formData, // This now includes referenceImage: base64_string
+        ...formData,
         baseUrl: settings.baseUrl,
         model: settings.model
       });
       setSlidesJson(response.data.slides);
       setTitle(response.data.title);
       setDbId(response.data.id);
+      setView('workspace');
     } catch (err) {
       setError(err.response?.data?.error || err.message);
     } finally {
@@ -82,6 +97,7 @@ function App() {
     setDbId(historyItem.id);
     setTemplateType('default');
     setShowHistory(false);
+    setView('workspace');
   };
 
   const handleExport = (target) => {
@@ -159,28 +175,28 @@ function App() {
 
       {/* Top Navigation */}
       <header className="w-full flex items-center justify-between p-4 px-8 border-b border-white/5 bg-[#0B0F17]/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="flex items-center gap-3 cursor-pointer" onClick={() => { setSlidesJson(null); setDbId(null); }}>
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => { setSlidesJson(null); setDbId(null); setView('home'); }}>
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-500/20">
                <Presentation className="w-5 h-5 text-white" />
             </div>
             <h1 className="text-xl font-bold tracking-tight text-white">Gamma<span className="text-violet-400">Clone</span></h1>
         </div>
         <div className="flex items-center gap-4">
-            {slidesJson && (
-                <button onClick={() => { setSlidesJson(null); setDbId(null); }} className="text-sm font-medium text-gray-400 hover:text-white transition-colors">
-                    New Presentation
+            {view !== 'home' && (
+                <button onClick={() => { setSlidesJson(null); setDbId(null); setView('home'); }} className="text-sm font-medium text-gray-400 hover:text-white transition-colors">
+                    Home
                 </button>
             )}
             <button onClick={() => setShowHistory(true)} className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-sm font-medium transition-colors border border-white/5">
                 <History className="w-4 h-4 text-gray-400" /> History
             </button>
-            <button onClick={() => setShowSettings(true)} className="flex items-center justify-center p-2 bg-white/5 hover:bg-white/10 rounded-lg transition-colors border border-white/5 tooltip" title="Settings">
+            <button onClick={() => setShowSettings(true)} className="flex items-center justify-center p-2 bg-white/5 hover:bg-white/10 rounded-lg transition-colors border border-white/5" title="Settings">
                 <Settings className="w-4 h-4 text-gray-400" />
             </button>
         </div>
       </header>
 
-      <main className="w-full h-[calc(100vh-73px)] relative flex items-center justify-center">
+      <main className="w-full h-[calc(100vh-73px)] relative overflow-y-auto overflow-x-hidden flex flex-col items-center">
         
         {/* Error Toast */}
         {error && (
@@ -189,13 +205,31 @@ function App() {
             </div>
         )}
 
-        {!slidesJson ? (
+        {view === 'home' && (
+            <HomePage
+              onSelectMode={handleSelectMode}
+              onShowHistory={() => setShowHistory(true)}
+            />
+        )}
+
+        {view === 'create' && (
             <CreationLauncher 
               onGenerate={handleGenerateJson} 
               isGenerating={isGenerating} 
-              baseUrl={settings.baseUrl} 
+              baseUrl={settings.baseUrl}
+              onBack={() => setView('home')}
             />
-        ) : (
+        )}
+
+        {view === 'wizard' && (
+            <WizardForm
+              onGenerate={handleGenerateJson}
+              isGenerating={isGenerating}
+              baseUrl={settings.baseUrl}
+            />
+        )}
+
+        {view === 'workspace' && slidesJson && (
             <Workspace 
               slides={slidesJson}
               setSlides={setSlidesJson}
