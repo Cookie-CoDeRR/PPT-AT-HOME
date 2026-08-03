@@ -1,17 +1,22 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 let dataset = null;
-const DATASET_PATH = '/Users/cookiecoderr/Coding/PPTX_Data/dataset_layout_bank.json';
+const DATASET_PATH = path.join(__dirname, '..', '..', 'dataset_layout_bank.json');
+const ALT_DATASET_PATH = '/Users/cookiecoderr/Coding/PPTX_Data/dataset_layout_bank.json';
+
+let recentlyUsedSequences = [];
 
 // Initialize dataset
 try {
-    if (fs.existsSync(DATASET_PATH)) {
-        const rawData = fs.readFileSync(DATASET_PATH, 'utf-8');
+    const targetPath = fs.existsSync(DATASET_PATH) ? DATASET_PATH : ALT_DATASET_PATH;
+    if (fs.existsSync(targetPath)) {
+        const rawData = fs.readFileSync(targetPath, 'utf-8');
         dataset = JSON.parse(rawData);
-        console.log(`[LayoutRouter] Successfully loaded dataset_layout_bank.json (${dataset.decks?.length || 0} decks)`);
+        console.log(`[LayoutRouter] Successfully loaded dataset_layout_bank.json (${dataset.decks?.length || 0} decks) from ${targetPath}`);
     } else {
-        console.warn(`[LayoutRouter] Warning: Dataset not found at ${DATASET_PATH}`);
+        console.warn(`[LayoutRouter] Warning: Dataset not found at ${DATASET_PATH} or ${ALT_DATASET_PATH}`);
     }
 } catch (error) {
     console.error('[LayoutRouter] Error loading dataset:', error);
@@ -78,9 +83,37 @@ function findExactMatch(slideCount, intent) {
     }
     
     if (validDecks.length > 0) {
-        // Randomly select one of the valid decks
-        const selected = validDecks[Math.floor(Math.random() * validDecks.length)];
-        let seq = [...selected.sequence];
+        // Deep Dataset Sampling with Anti-Pattern Lock
+        let selectedSequence = null;
+        let attempts = 0;
+        let selected = null;
+        
+        while (attempts < 10) {
+            // Cryptographic deep sampling
+            const randomIndex = crypto.randomInt(0, validDecks.length);
+            selected = validDecks[randomIndex];
+            
+            const seqString = JSON.stringify(selected.sequence);
+            
+            // Check if recently used (Anti-Pattern Lock)
+            if (!recentlyUsedSequences.includes(seqString) || validDecks.length <= recentlyUsedSequences.length) {
+                selectedSequence = selected.sequence;
+                // Add to recently used (cache size 3)
+                recentlyUsedSequences.push(seqString);
+                if (recentlyUsedSequences.length > 3) {
+                    recentlyUsedSequences.shift();
+                }
+                break;
+            }
+            attempts++;
+        }
+        
+        // Fallback if lock is too restrictive
+        if (!selectedSequence) {
+            selectedSequence = validDecks[crypto.randomInt(0, validDecks.length)].sequence;
+        }
+        
+        let seq = [...selectedSequence];
         
         // Adjust length to match exact slide count if we used nearest
         if (seq.length > slideCount) {

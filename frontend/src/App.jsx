@@ -77,7 +77,7 @@ function App() {
       const response = await axios.post('http://localhost:3000/api/generate-json', {
         ...formData,
         baseUrl: settings.baseUrl,
-        model: settings.model
+        model: formData.model || settings.model
       });
       setSlidesJson(response.data.slides);
       setTitle(response.data.title);
