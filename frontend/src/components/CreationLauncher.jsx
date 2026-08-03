@@ -15,7 +15,7 @@ const CONTENT_TYPES = [
   { id: 'webpage',      label: 'Webpage',       icon: Globe },
   { id: 'document',     label: 'Document',       icon: FileText },
   { id: 'social',       label: 'Social',         icon: Share2 },
-  { id: 'graphic',      label: 'Graphic',        icon: ImageIcon,      badge: 'NEW', soon: true },
+  { id: 'graphic',      label: 'Graphic',        icon: ImageIcon,      badge: 'NEW' },
 ];
 
 const SLIDE_COUNTS = [5, 8, 10, 12, 15];
@@ -30,6 +30,18 @@ const ORIENTATIONS = [
   { label: 'Square (1:1)',     value: 'LAYOUT_4x3'  },
 ];
 const TONES = ['Professional/Corporate', 'Academic', 'Creative', 'Casual'];
+
+const GRAPHIC_STYLES = [
+  { id: 'none', label: 'None', preview: '' },
+  { id: 'scene', label: 'Scene', preview: 'https://images.unsplash.com/photo-1559128010-7c1ad6e1b6a5?w=200&h=200&fit=crop' },
+  { id: 'illustration', label: 'Illustration', preview: 'https://images.unsplash.com/photo-1505909182942-e2f09aee3e89?w=200&h=200&fit=crop' },
+  { id: 'flat_line_art', label: 'Flat Line Art', preview: 'https://images.unsplash.com/photo-1549492423-400259a2e574?w=200&h=200&fit=crop' },
+  { id: 'technical_line', label: 'Technical Line', preview: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=200&h=200&fit=crop' },
+  { id: 'modern_art', label: 'Modern Art', preview: 'https://images.unsplash.com/photo-1543857778-c4a1a3e0b2eb?w=200&h=200&fit=crop' },
+];
+const GRAPHIC_ASPECTS = ['1:1', '16:9', '9:16', '4:3'];
+const GRAPHIC_COUNTS = [1, 2, 3, 4];
+const GRAPHIC_QUALITIES = ['Standard', 'HD'];
 
 const PPT_PROMPTS = [
   { icon: '📈', text: 'Marketing psychology hacks that feel illegal (but aren\'t)' },
@@ -140,6 +152,12 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
   const [language, setLanguage] = useState('English (UK)');
   const [docSize, setDocSize] = useState('Default');
   
+  // Graphic state
+  const [graphicStyle, setGraphicStyle] = useState('none');
+  const [graphicAspect, setGraphicAspect] = useState('1:1');
+  const [graphicCount, setGraphicCount] = useState(3);
+  const [graphicQuality, setGraphicQuality] = useState('Standard');
+  
   const getPromptsPool = (type) => {
     if (type === 'webpage') return WEBPAGE_PROMPTS;
     if (type === 'document') return DOCUMENT_PROMPTS;
@@ -229,11 +247,14 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
       templateType: 'default',
       density: 'Detailed',
       includeImages: true,
-      slideSize: (contentType === 'presentation' || contentType === 'social') ? orientation : (contentType === 'document' ? docSize : undefined),
+      slideSize: contentType === 'graphic' ? graphicAspect : ((contentType === 'presentation' || contentType === 'social') ? orientation : (contentType === 'document' ? docSize : undefined)),
       language: (contentType === 'webpage' || contentType === 'document' || contentType === 'social') ? language : undefined,
       referenceImage: referenceImage?.data,
       model: activeModel,
       temperature: 0.6,
+      graphicStyle: contentType === 'graphic' ? graphicStyle : undefined,
+      graphicCount: contentType === 'graphic' ? graphicCount : undefined,
+      graphicQuality: contentType === 'graphic' ? graphicQuality : undefined,
     });
   };
 
@@ -373,6 +394,29 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
               onChange={setLanguage}
             />
           </>
+        ) : contentType === 'graphic' ? (
+          <>
+            <PillDropdown
+              value={GRAPHIC_STYLES.find(s => s.id === graphicStyle)?.label || 'None'}
+              options={GRAPHIC_STYLES.map(s => ({ label: s.label, value: s.id }))}
+              onChange={setGraphicStyle}
+            />
+            <PillDropdown
+              value={graphicAspect}
+              options={GRAPHIC_ASPECTS}
+              onChange={setGraphicAspect}
+            />
+            <PillDropdown
+              value={graphicCount}
+              options={GRAPHIC_COUNTS}
+              onChange={v => setGraphicCount(Number(v))}
+            />
+            <PillDropdown
+              value={graphicQuality}
+              options={GRAPHIC_QUALITIES}
+              onChange={setGraphicQuality}
+            />
+          </>
         ) : (
           // Document
           <>
@@ -462,75 +506,143 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
             className="w-full bg-transparent text-gray-100 placeholder-gray-500 text-base px-5 pt-5 pb-3 resize-none outline-none border-none focus:ring-0"
           />
 
-          {/* Bottom toolbar */}
-          <div className="flex items-center justify-between px-4 pb-3 gap-3">
-            <div className="flex items-center gap-1">
-              <div {...getRAGProps()}>
-                <input {...getRAGInput()} />
-                <button className="p-2 rounded-lg text-gray-500 hover:text-blue-400 hover:bg-white/8 transition-colors" title="Attach document (RAG)">
-                  <Paperclip className="w-4 h-4" />
-                </button>
-              </div>
-              <div {...getImageProps()}>
+          {/* Bottom toolbar inside the input for graphic, or bottom row for others */}
+          {contentType === 'graphic' ? (
+            <div className="px-5 pb-4">
+              <div {...getImageProps()} className="inline-block">
                 <input {...getImageInput()} />
-                <button className="p-2 rounded-lg text-gray-500 hover:text-purple-400 hover:bg-white/8 transition-colors" title="Attach reference image">
-                  <Camera className="w-4 h-4" />
+                <button className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-xs text-gray-300 font-medium transition-colors">
+                  <Camera className="w-3.5 h-3.5 text-blue-400" />
+                  Add reference
                 </button>
               </div>
             </div>
+          ) : (
+            <div className="flex items-center justify-between px-4 pb-3 gap-3">
+              <div className="flex items-center gap-1">
+                <div {...getRAGProps()}>
+                  <input {...getRAGInput()} />
+                  <button className="p-2 rounded-lg text-gray-500 hover:text-blue-400 hover:bg-white/8 transition-colors" title="Attach document (RAG)">
+                    <Paperclip className="w-4 h-4" />
+                  </button>
+                </div>
+                <div {...getImageProps()}>
+                  <input {...getImageInput()} />
+                  <button className="p-2 rounded-lg text-gray-500 hover:text-purple-400 hover:bg-white/8 transition-colors" title="Attach reference image">
+                    <Camera className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
 
-            <button
-              onClick={handleSubmit}
-              disabled={!prompt.trim() || isGenerating || activeModel === '⚠️ No Models Loaded'}
-              id="generate-submit-btn"
-              className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white text-sm rounded-lg font-bold shadow-lg shadow-violet-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:scale-105 active:scale-95"
-            >
-              {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-              {isGenerating ? 'Generating…' : 'Generate'}
+              <button
+                onClick={handleSubmit}
+                disabled={!prompt.trim() || isGenerating || activeModel === '⚠️ No Models Loaded'}
+                className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white text-sm rounded-lg font-bold shadow-lg shadow-violet-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:scale-105 active:scale-95"
+              >
+                {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                {isGenerating ? 'Generating…' : 'Generate'}
+              </button>
+            </div>
+          )}
+        </div>
+      </motion.div>
+
+      {contentType === 'graphic' ? (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}
+          className="w-full max-w-3xl"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm text-gray-300 font-medium">Image style</p>
+            <button className="text-xs text-blue-400 hover:text-blue-300">See more</button>
+          </div>
+          
+          <div className="flex gap-3 overflow-x-auto pb-4 hide-scrollbar">
+            {GRAPHIC_STYLES.map(style => (
+              <button
+                key={style.id}
+                onClick={() => setGraphicStyle(style.id)}
+                className={`flex-shrink-0 w-28 h-28 rounded-xl overflow-hidden relative border-2 transition-all ${graphicStyle === style.id ? 'border-blue-500' : 'border-transparent hover:border-white/20'}`}
+              >
+                {style.id === 'none' ? (
+                  <div className="w-full h-full bg-white/5 flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-full border border-gray-500 flex items-center justify-center">
+                      <div className="w-6 h-[1px] bg-gray-500 rotate-45" />
+                    </div>
+                  </div>
+                ) : (
+                  <img src={style.preview} alt={style.label} className="w-full h-full object-cover" />
+                )}
+                {graphicStyle === style.id && (
+                  <div className="absolute bottom-0 left-0 w-full bg-blue-500/90 py-0.5 text-center">
+                    <span className="text-[10px] font-bold text-white uppercase">✓ {style.id === 'none' ? 'None' : ''}</span>
+                  </div>
+                )}
+                {graphicStyle !== style.id && (
+                  <div className="absolute bottom-1 left-2">
+                    <span className="text-[10px] text-white/90 drop-shadow-md">{style.label}</span>
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+
+          <div className="w-full mt-2 mb-8 p-3 rounded-xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-orange-400 text-sm">
+              <span className="w-4 h-4 rounded-full border border-orange-400 flex items-center justify-center text-[10px] font-bold">!</span>
+              <span className="font-semibold">You're out of credits.</span>
+              <span className="text-orange-200">Upgrade to continue.</span>
+            </div>
+            <button className="px-4 py-1.5 bg-white text-gray-900 text-xs font-bold rounded-full hover:bg-gray-100 transition-colors">
+              Upgrade
             </button>
           </div>
-        </div>
-      </motion.div>
 
-      {/* Example prompts */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.22 }}
-        className="w-full max-w-3xl"
-      >
-        <p className="text-xs text-gray-500 text-center mb-4 uppercase tracking-widest">Example prompts</p>
+          <div className="w-full flex items-center gap-4 mb-6 opacity-60">
+            <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent to-white/20" />
+            <span className="text-xs text-gray-400">Or, start with a template</span>
+            <div className="h-[1px] flex-1 bg-gradient-to-l from-transparent to-white/20" />
+          </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-5">
-          {examplePrompts.map((ep, i) => (
-            <motion.button
-              key={i}
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.25 + i * 0.04 }}
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setPrompt(ep.text)}
-              className="group relative flex items-start gap-3 p-4 rounded-xl bg-white/4 border border-white/8 hover:border-violet-500/30 hover:bg-white/8 text-left transition-all"
-            >
-              <span className="text-xl leading-none flex-shrink-0 mt-0.5">{ep.icon}</span>
-              <p className="text-xs text-gray-300 group-hover:text-white transition-colors leading-relaxed flex-1">{ep.text}</p>
-              <Plus className="w-3.5 h-3.5 text-gray-600 group-hover:text-violet-400 transition-colors flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100" />
-            </motion.button>
-          ))}
-        </div>
+          <div className="w-full rounded-xl border border-white/10 bg-white/5 overflow-hidden cursor-pointer hover:bg-white/10 transition-colors">
+            <div className="p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-bold">1</div>
+                <span className="text-sm font-medium text-gray-200">What do you want to design?</span>
+              </div>
+              <ChevronDown className="w-4 h-4 text-gray-500" />
+            </div>
+          </div>
 
-        {/* Shuffle */}
-        <div className="flex justify-center">
-          <button
-            onClick={() => setExamplePrompts(getRandomSix(currentPromptsPool))}
-            className="flex items-center gap-2 px-5 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-sm text-gray-400 hover:text-white transition-all font-medium"
-          >
-            <Shuffle className="w-4 h-4" />
-            Shuffle
-          </button>
-        </div>
-      </motion.div>
+        </motion.div>
+      ) : (
+        /* Example prompts */
+        <motion.div
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}
+          className="w-full max-w-3xl"
+        >
+          <p className="text-xs text-gray-500 text-center mb-4 uppercase tracking-widest">Example prompts</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-5">
+            {examplePrompts.map((ep, i) => (
+              <motion.button
+                key={i} initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.25 + i * 0.04 }}
+                whileHover={{ scale: 1.02, y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => setPrompt(ep.text)}
+                className="group relative flex items-start gap-3 p-4 rounded-xl bg-white/4 border border-white/8 hover:border-violet-500/30 hover:bg-white/8 text-left transition-all"
+              >
+                <span className="text-xl leading-none flex-shrink-0 mt-0.5">{ep.icon}</span>
+                <p className="text-xs text-gray-300 group-hover:text-white transition-colors leading-relaxed flex-1">{ep.text}</p>
+                <Plus className="w-3.5 h-3.5 text-gray-600 group-hover:text-violet-400 transition-colors flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100" />
+              </motion.button>
+            ))}
+          </div>
+          <div className="flex justify-center">
+            <button onClick={() => setExamplePrompts(getRandomSix(currentPromptsPool))}
+              className="flex items-center gap-2 px-5 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-sm text-gray-400 hover:text-white transition-all font-medium">
+              <Shuffle className="w-4 h-4" /> Shuffle
+            </button>
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 }
