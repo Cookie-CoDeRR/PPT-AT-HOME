@@ -22,5 +22,4 @@ venv.bak/
 temp_test.json
 dataset_layout_bank.json
 .env
-package-lock.json
 ppt_maker_docker_bundle.tar.gz
