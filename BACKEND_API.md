@@ -75,6 +75,7 @@
   "density": "Bullet Points Only | Detailed | Comprehensive",
   "includeImages": true,
   "useRag": false,
+  "useWebRag": false,
   "templateType": "default",
   "slideSize": "LAYOUT_16x9",
   "referenceImage": "data:image/...;base64,...",
@@ -84,6 +85,7 @@
 }
 ```
 
+> `useWebRag` (boolean, optional, default `false`): When `true`, the backend performs a live DuckDuckGo web search using the prompt, scrapes the top 3 result pages, and injects ~1500 chars of real-world text snippets into the LLM system prompt as grounding context. This is Google-style pseudo-RAG — no file upload or embedding server required. Can be used simultaneously with `useRag` (both contexts are merged). Fails gracefully: if DuckDuckGo or scraping fails, generation proceeds normally without context.
 > `referenceImage` is optional. When present, the LLM is sent a multimodal message (vision).
 
 **Successful Response:**

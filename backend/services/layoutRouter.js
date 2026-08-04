@@ -124,6 +124,12 @@ function findExactMatch(slideCount, intent) {
             seq.splice(seq.length - 1, 0, 'standard_text'); // Insert before the end
         }
         
+        console.log(`[LayoutRouter] 🎯 Found layout match in dataset_layout_bank.json:`);
+        console.log(`  └─ Deck Source File : ${selected.file_name || 'unknown'}`);
+        console.log(`  └─ Original Deck Slides: ${selected.slide_count} (Requested: ${slideCount})`);
+        console.log(`  └─ Classified Intent: '${intent}'`);
+        console.log(`  └─ Layout Sequence  :`, JSON.stringify(seq));
+        
         return seq;
     }
     
@@ -145,14 +151,25 @@ function getBlueprint(userPrompt, requestedSlides, temperature) {
     const count = parseInt(requestedSlides) || 5;
     const temp = parseFloat(temperature) || 0.6;
     
+    console.log(`[LayoutRouter] Generating blueprint (prompt="${userPrompt || ''}", slides=${count}, temp=${temp}, intent='${intent}')`);
+    
+    let seq;
     if (temp <= 0.3) {
         // Strict: Exact sequence match
-        let seq = findExactMatch(count, intent);
-        return seq || getFallbackSequence(count);
+        seq = findExactMatch(count, intent);
+        if (!seq) {
+            console.log(`[LayoutRouter] ⚠️ No dataset match found; using fallback sequence.`);
+            seq = getFallbackSequence(count);
+        }
+        return seq;
     } 
     else if (temp <= 0.7) {
         // Dynamic: Swap 1 or 2 middle slides
-        let seq = findExactMatch(count, intent) || getFallbackSequence(count);
+        seq = findExactMatch(count, intent);
+        if (!seq) {
+            console.log(`[LayoutRouter] ⚠️ No dataset match found; using fallback sequence before swaps.`);
+            seq = getFallbackSequence(count);
+        }
         
         // Don't modify if too short
         if (seq.length > 3) {
@@ -169,14 +186,16 @@ function getBlueprint(userPrompt, requestedSlides, temperature) {
                 
                 seq[swapIdx] = newLayout;
             }
+            console.log(`[LayoutRouter] 🔀 Applied ${numSwaps} dynamic layout swap(s). Final sequence:`, JSON.stringify(seq));
         }
         return seq;
     } 
     else {
         // High Entropy: Frankenstein sequence
+        console.log(`[LayoutRouter] 🎲 High entropy mode active. Generating randomized layout sequence.`);
         if (count <= 1) return ['title_hero'];
         
-        const seq = ['title_hero'];
+        seq = ['title_hero'];
         let prevLayout = 'title_hero';
         
         for (let i = 1; i < count - 1; i++) {
@@ -190,6 +209,7 @@ function getBlueprint(userPrompt, requestedSlides, temperature) {
         }
         
         seq.push('summary_takeaways');
+        console.log(`[LayoutRouter] 🎲 High entropy layout sequence:`, JSON.stringify(seq));
         return seq;
     }
 }

@@ -3,7 +3,16 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 
-async function generatePptx(slides, title, themeName, slideSize, customThemeObj, customBgObj) {
+const IMAGE_STYLE_PRESETS = {
+    isometric_3d:  ", highly detailed isometric 3D render, glassmorphism UI elements, dark mode, glowing neon accents, clean corporate tech presentation asset, 8k resolution, unreal engine 5, abstract digital art, vibrant.",
+    stock_photo:   ", professional stock photo, high quality, sharp focus, natural lighting, business setting, photorealistic.",
+    flat_design:   ", flat design illustration, minimal, clean vector art, bold colors, simple shapes, modern infographic style.",
+    watercolor:    ", soft watercolor illustration, artistic, gentle brush strokes, pastel tones, dreamy, creative presentation asset.",
+    cinematic:     ", cinematic photograph, dramatic lighting, shallow depth of field, 85mm lens, moody atmosphere, ultra-realistic.",
+    minimal_dark:  ", minimal dark background, sleek product shot, soft gradient, professional tech aesthetic, studio lighting.",
+};
+
+async function generatePptx(slides, title, themeName, slideSize, customThemeObj, customBgObj, imageStyle) {
     
     const THEME_PRESETS = [
       { name: "Modern Clean", headerFont: "Inter", bodyFont: "Plus Jakarta Sans", bgColor: "0f172a", accentColor: "8b5cf6", titleColor: "f8fafc", textColor: "cbd5e1", cardBg: "1e293b" },
@@ -47,8 +56,10 @@ async function generatePptx(slides, title, themeName, slideSize, customThemeObj,
     async function fetchImageBase64(query) {
         if (!query) return null;
         try {
-            const ENHANCEMENT_SUFFIX = ", highly detailed isometric 3D render, glassmorphism UI elements, dark mode, glowing neon accents, clean corporate tech presentation asset, 8k resolution, unreal engine 5, abstract digital art, vibrant.";
-            const enhancedQuery = query.trim() + ENHANCEMENT_SUFFIX;
+            const styleSuffix = IMAGE_STYLE_PRESETS[imageStyle] || IMAGE_STYLE_PRESETS['isometric_3d'];
+            const enhancedQuery = query.trim() + styleSuffix;
+            console.log(`[ImageFetch] Style='${imageStyle || 'isometric_3d'}' | Query: "${enhancedQuery.substring(0, 80)}..."`);
+
             
             // First try local Python diffusers endpoint
             try {
@@ -71,12 +82,29 @@ async function generatePptx(slides, title, themeName, slideSize, customThemeObj,
             const contentType = response.headers['content-type'] || 'image/jpeg';
             return `data:${contentType};base64,${base64}`;
         } catch (e) {
-            console.error("Failed to fetch image:", e.message);
-            return null;
+            console.error(`[ImageFetch] Failed to fetch image for "${query}": ${e.message}. Using placeholder.`);
+            // Issue 13 fix: generate a colored SVG placeholder so PPTX always has an image slot filled
+            return generatePlaceholderImage(query);
         }
     }
 
+    function generatePlaceholderImage(query) {
+        const label = (query || 'Image').slice(0, 60);
+        const colors = ['1e293b', '1f2937', '0f172a', '1a1a2e', '111827'];
+        const bg = colors[Math.abs(label.charCodeAt(0)) % colors.length];
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600">
+  <rect width="800" height="600" fill="#${bg}"/>
+  <rect x="0" y="0" width="800" height="4" fill="#8b5cf6"/>
+  <rect x="0" y="596" width="800" height="4" fill="#8b5cf6"/>
+  <text x="400" y="280" font-family="sans-serif" font-size="22" fill="#94a3b8" text-anchor="middle" dominant-baseline="middle">🖼</text>
+  <text x="400" y="320" font-family="sans-serif" font-size="16" fill="#64748b" text-anchor="middle" dominant-baseline="middle">${label.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</text>
+</svg>`;
+        const b64 = Buffer.from(svg).toString('base64');
+        return `data:image/svg+xml;base64,${b64}`;
+    }
+
     // Pre-fetch images concurrently
+
     const imagePromises = slides.map(async (slide) => {
         if (slide.image_search_query) {
             slide.image_base64 = await fetchImageBase64(slide.image_search_query);
@@ -202,5 +230,6 @@ async function generateFromTemplate(slides, title, templatePath) {
 
 module.exports = {
     generatePptx,
-    generateFromTemplate
+    generateFromTemplate,
+    IMAGE_STYLE_PRESETS
 };

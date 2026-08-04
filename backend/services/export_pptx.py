@@ -90,6 +90,8 @@ def purge_placeholders(slide):
     ]
     for sp in to_remove:
         sp_tree.remove(sp)
+    if to_remove:
+        print(f'[Purge] Removed {len(to_remove)} inherited placeholder(s) from slide.')
 
 
 def add_text_box(slide, text, left, top, width, height,
@@ -178,6 +180,7 @@ def apply_defensive_fallbacks(slides):
         if not slide.get("title") or not str(slide.get("title")).strip():
             slide["title"] = "Slide Content Missing"
         stype = slide.get("slide_type", "default")
+        # Issue 4 fix: title_hero MUST NOT get bullet fallbacks — it only renders title+subtitle
         if stype in ["standard_text", "summary_takeaways", "stat_callout",
                      "two_column_image", "default"]:
             if not slide.get("bullets") or len(slide.get("bullets", [])) == 0:
@@ -233,15 +236,21 @@ def build_title_hero_slide(slide, data, theme):
     txt_col  = theme_color(theme, "titleColor", "FFFFFF")
     title    = data.get("title", "Presentation Title")
     subtitle = data.get("subtitle", "")
-    bar_w = CONTENT_W * 0.55
-    bar_x = (SLIDE_W - bar_w) / 2
+
     title_y = SLIDE_H / 2 - 1.0
-    add_rectangle(slide, bar_x, title_y - 0.18, bar_w, 0.06, accent)
+
+    # Issue 2 fix: clean accent lines instead of alpha-injected halo bars
+    # Top accent line (full width)
+    add_rectangle(slide, CONTENT_X, title_y - 0.15, CONTENT_W, 0.04, accent)
+
     add_text_box(slide, title, 1.0, title_y, CONTENT_W - 0.5, 1.1,
                  40, txt_col, PP_ALIGN.CENTER, bold=True)
-    add_rectangle(slide, bar_x, title_y + 1.15, bar_w, 0.06, accent)
+
+    # Bottom accent line
+    add_rectangle(slide, CONTENT_X, title_y + 1.18, CONTENT_W, 0.04, accent)
+
     if subtitle:
-        add_text_box(slide, subtitle, 1.5, title_y + 1.3, CONTENT_W - 1.5, 0.7,
+        add_text_box(slide, subtitle, 1.5, title_y + 1.35, CONTENT_W - 1.5, 0.7,
                      18, accent, PP_ALIGN.CENTER)
 
 
@@ -261,15 +270,20 @@ def build_comparison_slide(slide, data, theme):
     sub_col  = "A0A8BE"
 
     title = data.get("title", "Comparison")
-    add_text_box(slide, title, CONTENT_X, TITLE_Y, CONTENT_W, TITLE_H,
-                 30, txt_col, PP_ALIGN.CENTER, bold=True)
+    t_h, b_y, b_h = calc_title_layout(title, base_font_pt=30)
+    title_col = theme_color(theme, "titleColor", txt_col)
+    add_text_box(slide, title, CONTENT_X, TITLE_Y, CONTENT_W, t_h,
+                 30, title_col, PP_ALIGN.CENTER, bold=True)
+
+    # Recompute card geometry with dynamic body top
+    card_y_base = b_y
 
     left_d  = data.get("column_left",  {"title": "Option A", "bullets": []})
     right_d = data.get("column_right", {"title": "Option B", "bullets": []})
 
-    # Card dimensions
-    card_y = BODY_Y + 0.1
-    card_h = BODY_H - 0.2
+    # Card dimensions (use dynamic body position from title layout)
+    card_y = card_y_base + 0.1
+    card_h = SLIDE_H - card_y - MARGIN - 0.1
     card_w = 5.8
     left_x  = CONTENT_X + 0.2
     right_x = SLIDE_W - MARGIN - 0.2 - card_w
@@ -325,9 +339,16 @@ def build_bento_grid_slide(slide, data, theme):
     if not items:
         return
 
-    # Grid geometry
-    cols     = 3
-    rows     = 2
+    # Bug 3 fix: compute rows dynamically from total span area so extra items
+    # get a 3rd/4th row instead of being silently dropped.
+    cols = 3
+    total_span = sum(
+        4 if (item.get("size", "small").lower() == "large") else
+        3 if (item.get("size", "").lower() == "wide") else
+        2 if (item.get("size", "").lower() == "tall") else 1
+        for item in items
+    )
+    rows = max(2, math.ceil(total_span / cols))
     gap      = 0.18
     grid_x   = CONTENT_X + 0.1
     grid_y   = BODY_Y + 0.1
@@ -392,14 +413,16 @@ def build_bento_grid_slide(slide, data, theme):
         title_text = item.get("item_title") or item.get("title", "")
         desc_text  = item.get("item_text")  or item.get("desc",  "")
 
-        # Scale fonts proportionally with cell area (mirrors React text-3xl/text-xl logic)
+        # Scale fonts proportionally with cell area — adjusted for extra rows
         area = w * h
-        if area > 10:    # large (2x2 cell ~11.5 sq inches)
+        if area > 10:
             fs_title, fs_desc = 22, 14
-        elif area > 5:   # wide (3x1 ~8 sq in) or tall (1x2 ~5.8 sq in)
+        elif area > 5:
             fs_title, fs_desc = 18, 13
-        else:            # small (1x1 ~2.9 sq in)
+        elif area > 2:
             fs_title, fs_desc = 13, 11
+        else:          # very small cells in high-row grids
+            fs_title, fs_desc = 11, 9
 
         title_box_h = min(0.55, h * 0.2)
         add_text_box(slide, title_text,
@@ -425,12 +448,16 @@ def build_timeline_slide(slide, data, theme):
     sub_col  = "A0A8BE"
 
     title = data.get("title", "Timeline")
-    add_text_box(slide, title, CONTENT_X, TITLE_Y, CONTENT_W, TITLE_H,
-                 24, txt_col, PP_ALIGN.CENTER, bold=True)
+    t_h, b_y, b_h = calc_title_layout(title, base_font_pt=24)
+    title_col = theme_color(theme, "titleColor", txt_col)
+    add_text_box(slide, title, CONTENT_X, TITLE_Y, CONTENT_W, t_h,
+                 24, title_col, PP_ALIGN.CENTER, bold=True)
 
     steps = data.get("steps", [])
     if not steps:
         return
+    # Issue 14 fix: cap to 5 steps to avoid card overflow
+    steps = steps[:5]
 
     # Mid-line y position
     line_y = 3.9
@@ -445,6 +472,8 @@ def build_timeline_slide(slide, data, theme):
     card_w = min(step_w_total - 0.2, 2.4)
     card_h = 1.5
     dot_d  = 0.28
+    # Issue 14 fix: reduce font size for dense timelines to prevent text overflow
+    step_font = 10 if n <= 3 else (9 if n == 4 else 8)
 
     above_card_y = line_y - card_h - 0.35
     below_card_y = line_y + 0.35
@@ -464,11 +493,11 @@ def build_timeline_slide(slide, data, theme):
         # Step label
         add_text_box(slide, step.get("step", ""),
                      card_x + 0.12, card_y + 0.1, card_w - 0.24, 0.38,
-                     10, accent, PP_ALIGN.CENTER, bold=True)
+                     step_font, accent, PP_ALIGN.CENTER, bold=True)
         # Step text
         add_text_box(slide, step.get("text", ""),
                      card_x + 0.12, card_y + 0.5, card_w - 0.24, card_h - 0.55,
-                     10, sub_col, PP_ALIGN.CENTER)
+                     step_font, sub_col, PP_ALIGN.CENTER)
 
         # Connector vertical stub from dot to card
         if i % 2 == 0:
@@ -558,13 +587,19 @@ def build_grid_list_slide(slide, data, theme):
     add_text_box(slide, title, CONTENT_X, TITLE_Y, CONTENT_W, TITLE_H,
                  24, txt_col, PP_ALIGN.CENTER, bold=True)
 
-    items = data.get("items", [])[:4]
+    # Bug 2 fix: Remove [:4] cap — compute rows dynamically so all items render.
+    items = data.get("items", [])
     if not items:
         return
 
-    gap    = 0.2
-    col_w  = (CONTENT_W - gap) / 2
-    row_h  = (BODY_H - gap) / 2
+    gap   = 0.2
+    col_w = (CONTENT_W - gap) / 2
+    rows  = math.ceil(len(items) / 2)
+    row_h = (BODY_H - gap * (rows - 1)) / rows
+
+    # Scale fonts down when cards become short so text doesn't overflow
+    fs_title = 14 if row_h >= 1.4 else (12 if row_h >= 1.0 else 10)
+    fs_desc  = 11 if row_h >= 1.4 else (10 if row_h >= 1.0 else 9)
 
     for i, item in enumerate(items):
         row = i // 2
@@ -580,10 +615,10 @@ def build_grid_list_slide(slide, data, theme):
                      11, "FFFFFF", PP_ALIGN.CENTER, bold=True)
         add_text_box(slide, item.get("item_title") or item.get("title", ""),
                      cx + 0.7, cy + 0.22, col_w - 0.9, 0.45,
-                     14, txt_col, bold=True)
+                     fs_title, txt_col, bold=True)
         add_text_box(slide, item.get("item_text") or item.get("desc", ""),
                      cx + 0.2, cy + 0.75, col_w - 0.4, row_h - 0.95,
-                     11, sub_col)
+                     fs_desc, sub_col)
 
 
 def build_three_card_grid_slide(slide, data, theme):
@@ -597,27 +632,37 @@ def build_three_card_grid_slide(slide, data, theme):
     add_text_box(slide, title, CONTENT_X, TITLE_Y, CONTENT_W, TITLE_H,
                  24, txt_col, PP_ALIGN.CENTER, bold=True)
 
-    cards = data.get("cards", [])[:3]
+    # Bug 1 fix: Remove [:3] cap — support 2–6+ cards with dynamic layout.
+    cards = data.get("cards", [])
     if not cards:
         return
 
-    n = len(cards)
-    gap = 0.2
-    card_w = (CONTENT_W - gap * (n - 1)) / n
-    card_h = BODY_H - 0.2
-    card_y = BODY_Y + 0.1
+    n    = len(cards)
+    gap  = 0.2
+    # For > 4 cards, wrap into 2 rows to keep cards legible
+    cols = min(n, 4)
+    rows = math.ceil(n / cols)
+    card_w = (CONTENT_W - gap * (cols - 1)) / cols
+    card_h = (BODY_H - gap * (rows - 1)) / rows - 0.05
+
+    # Scale font sizes down proportionally for wide layouts
+    fs_title = max(9,  14 - max(0, n - 3))
+    fs_desc  = max(8,  11 - max(0, n - 3))
 
     for i, card in enumerate(cards):
-        cx = CONTENT_X + i * (card_w + gap)
-        add_rounded_rect(slide, cx, card_y, card_w, card_h, shape_bg, border, line_pt=1.0)
-        add_rectangle(slide, cx, card_y, card_w, 0.05, accent)
+        row = i // cols
+        col = i % cols
+        cx = CONTENT_X + col * (card_w + gap)
+        cy = BODY_Y + 0.1 + row * (card_h + gap)
+        add_rounded_rect(slide, cx, cy, card_w, card_h, shape_bg, border, line_pt=1.0)
+        add_rectangle(slide, cx, cy, card_w, 0.05, accent)
 
         add_text_box(slide, card.get("card_title", ""),
-                     cx + 0.2, card_y + 0.25, card_w - 0.4, 0.5,
-                     14, txt_col, bold=True)
+                     cx + 0.2, cy + 0.25, card_w - 0.4, 0.5,
+                     fs_title, txt_col, bold=True)
         add_text_box(slide, card.get("card_text", ""),
-                     cx + 0.2, card_y + 0.8, card_w - 0.4, card_h - 0.9,
-                     11, sub_col)
+                     cx + 0.2, cy + 0.8, card_w - 0.4, card_h - 0.9,
+                     fs_desc, sub_col)
 
 
 def build_metric_dashboard_slide(slide, data, theme):
@@ -659,9 +704,16 @@ def build_metric_dashboard_slide(slide, data, theme):
         add_text_box(slide, m.get("value", ""),
                      cx + 0.1, card_y + 0.9, card_w - 0.2, 1.0,
                      30, accent, PP_ALIGN.CENTER, bold=True)
-        # Change badge (green if positive, red if negative)
+        # Issue 12 fix: Change badge — red if negative, gray if neutral/zero/N/A, green otherwise
         change = m.get("change", "")
-        change_col = red if str(change).startswith("-") else green
+        change_str = str(change).strip()
+        neutral_vals = {"+0%", "0%", "0", "n/a", "na", "-", ""}
+        if change_str.startswith("-"):
+            change_col = red
+        elif change_str.lower() in neutral_vals:
+            change_col = "6B7280"   # gray-500 for neutral
+        else:
+            change_col = green
         add_text_box(slide, change,
                      cx + 0.15, card_y + 2.0, card_w - 0.3, 0.45,
                      12, change_col, PP_ALIGN.CENTER, bold=True)
@@ -799,15 +851,19 @@ def build_default_slide(slide, data, theme):
     sub_col  = "A0A8BE"
 
     title = data.get("title", "")
-    add_text_box(slide, title, CONTENT_X, TITLE_Y, CONTENT_W, TITLE_H,
-                 24, txt_col, bold=True)
+    # Issue 8 fix: use dynamic title height so long titles don't overflow body
+    t_h, b_y, b_h = calc_title_layout(title, base_font_pt=24)
+    # Issue 9 fix: use titleColor key for title text
+    title_col = theme_color(theme, "titleColor", txt_col)
+    add_text_box(slide, title, CONTENT_X, TITLE_Y, CONTENT_W, t_h,
+                 24, title_col, bold=True)
 
     # Accent underline
-    add_rectangle(slide, CONTENT_X, TITLE_Y + TITLE_H, CONTENT_W * 0.35, 0.04, accent)
+    add_rectangle(slide, CONTENT_X, TITLE_Y + t_h, CONTENT_W * 0.35, 0.04, accent)
 
     subtitle    = data.get("subtitle", "")
-    current_y   = BODY_Y + 0.05
-    bullet_height = BODY_H - 0.1
+    current_y   = b_y + 0.05
+    bullet_height = b_h - 0.1
 
     if subtitle:
         add_text_box(slide, subtitle, CONTENT_X, current_y, CONTENT_W, 0.55,
@@ -899,16 +955,26 @@ def apply_custom_background(slide, bg_data, prs):
 def export_presentation(data, output_path, custom_bg=None):
     prs = Presentation()
 
+    # Issue 10 fix: dynamic slide coordinates based on actual canvas size
     slide_size = data.get("slideSize", "LAYOUT_16x9")
     if slide_size == "LAYOUT_4x3":
         prs.slide_width  = Inches(10.0)
         prs.slide_height = Inches(7.5)
+        actual_w = 10.0
     elif slide_size == "LAYOUT_16x10":
         prs.slide_width  = Inches(12.0)
         prs.slide_height = Inches(7.5)
+        actual_w = 12.0
     else:
         prs.slide_width  = Inches(13.333)
         prs.slide_height = Inches(7.5)
+        actual_w = 13.333
+
+    # Patch module-level constants to match the actual canvas
+    global SLIDE_W, CONTENT_W, BODY_H
+    SLIDE_W   = actual_w
+    CONTENT_W = SLIDE_W - MARGIN * 2
+    BODY_H    = SLIDE_H - BODY_Y - MARGIN
 
     blank_layout = prs.slide_layouts[6]
 
