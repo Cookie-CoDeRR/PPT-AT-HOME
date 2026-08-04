@@ -4,40 +4,50 @@ const path = require('path');
 const { spawn } = require('child_process');
 
 const IMAGE_STYLE_PRESETS = {
-    isometric_3d:  ", highly detailed isometric 3D render, glassmorphism UI elements, dark mode, glowing neon accents, clean corporate tech presentation asset, 8k resolution, unreal engine 5, abstract digital art, vibrant.",
-    stock_photo:   ", professional stock photo, high quality, sharp focus, natural lighting, business setting, photorealistic.",
-    flat_design:   ", flat design illustration, minimal, clean vector art, bold colors, simple shapes, modern infographic style.",
-    watercolor:    ", soft watercolor illustration, artistic, gentle brush strokes, pastel tones, dreamy, creative presentation asset.",
-    cinematic:     ", cinematic photograph, dramatic lighting, shallow depth of field, 85mm lens, moody atmosphere, ultra-realistic.",
-    minimal_dark:  ", minimal dark background, sleek product shot, soft gradient, professional tech aesthetic, studio lighting.",
+    isometric_3d: ", highly detailed isometric 3D render, glassmorphism UI elements, dark mode, glowing neon accents, clean corporate tech presentation asset, 8k resolution, unreal engine 5, abstract digital art, vibrant.",
+    stock_photo: ", professional stock photo, high quality, sharp focus, natural lighting, business setting, photorealistic.",
+    flat_design: ", flat design illustration, minimal, clean vector art, bold colors, simple shapes, modern infographic style.",
+    watercolor: ", soft watercolor illustration, artistic, gentle brush strokes, pastel tones, dreamy, creative presentation asset.",
+    cinematic: ", cinematic photograph, dramatic lighting, shallow depth of field, 85mm lens, moody atmosphere, ultra-realistic.",
+    minimal_dark: ", minimal dark background, sleek product shot, soft gradient, professional tech aesthetic, studio lighting.",
 };
 
 async function generatePptx(slides, title, themeName, slideSize, customThemeObj, customBgObj, imageStyle) {
-    
+
     const THEME_PRESETS = [
-      { name: "Modern Clean", headerFont: "Inter", bodyFont: "Plus Jakarta Sans", bgColor: "0f172a", accentColor: "8b5cf6", titleColor: "f8fafc", textColor: "cbd5e1", cardBg: "1e293b" },
-      { name: "Editorial Serif", headerFont: "Playfair Display", bodyFont: "Source Sans Pro", bgColor: "18181b", accentColor: "f43f5e", titleColor: "ffffff", textColor: "d4d4d8", cardBg: "27272a" },
-      { name: "Cyber Mono", headerFont: "JetBrains Mono", bodyFont: "Fira Code", bgColor: "090d16", accentColor: "06b6d4", titleColor: "e2e8f0", textColor: "94a3b8", cardBg: "0f172a" },
-      { name: "Vibrant Startup", headerFont: "Montserrat", bodyFont: "Roboto", bgColor: "111827", accentColor: "10b981", titleColor: "ffffff", textColor: "d1d5db", cardBg: "1f2937" },
-      { name: "Classic Light", headerFont: "Helvetica Neue", bodyFont: "Helvetica", bgColor: "f8fafc", accentColor: "3b82f6", titleColor: "0f172a", textColor: "334155", cardBg: "ffffff" },
-      { name: "Elegant Dark", headerFont: "Cinzel", bodyFont: "Lora", bgColor: "2c1e16", accentColor: "d4af37", titleColor: "fdfbf7", textColor: "eaddcf", cardBg: "3d2b1f" },
-      { name: "Playful Rounded", headerFont: "Nunito", bodyFont: "Quicksand", bgColor: "fffbeb", accentColor: "f59e0b", titleColor: "451a03", textColor: "78350f", cardBg: "fef3c7" },
-      { name: "Corporate Pro", headerFont: "Open Sans", bodyFont: "Lato", bgColor: "f1f5f9", accentColor: "0ea5e9", titleColor: "0f172a", textColor: "475569", cardBg: "ffffff" },
-      { name: "Futuristic", headerFont: "Orbitron", bodyFont: "Rajdhani", bgColor: "020617", accentColor: "e11d48", titleColor: "f8fafc", textColor: "94a3b8", cardBg: "0f172a" },
-      { name: "Retro Typewriter", headerFont: "Courier New", bodyFont: "Courier", bgColor: "fef08a", accentColor: "ea580c", titleColor: "422006", textColor: "713f12", cardBg: "fde047" }
+        { name: "Modern Clean", headerFont: "Inter", bodyFont: "Plus Jakarta Sans", bgColor: "0f172a", accentColor: "8b5cf6", titleColor: "f8fafc", textColor: "cbd5e1", cardBg: "1e293b" },
+        { name: "Editorial Serif", headerFont: "Playfair Display", bodyFont: "Source Sans Pro", bgColor: "18181b", accentColor: "f43f5e", titleColor: "ffffff", textColor: "d4d4d8", cardBg: "27272a" },
+        { name: "Cyber Mono", headerFont: "JetBrains Mono", bodyFont: "Fira Code", bgColor: "090d16", accentColor: "06b6d4", titleColor: "e2e8f0", textColor: "94a3b8", cardBg: "0f172a" },
+        { name: "Vibrant Startup", headerFont: "Montserrat", bodyFont: "Roboto", bgColor: "111827", accentColor: "10b981", titleColor: "ffffff", textColor: "d1d5db", cardBg: "1f2937" },
+        { name: "Classic Light", headerFont: "Helvetica Neue", bodyFont: "Helvetica", bgColor: "f8fafc", accentColor: "3b82f6", titleColor: "0f172a", textColor: "334155", cardBg: "ffffff" },
+        { name: "Elegant Dark", headerFont: "Cinzel", bodyFont: "Lora", bgColor: "2c1e16", accentColor: "d4af37", titleColor: "fdfbf7", textColor: "eaddcf", cardBg: "3d2b1f" },
+        { name: "Playful Rounded", headerFont: "Nunito", bodyFont: "Quicksand", bgColor: "fffbeb", accentColor: "f59e0b", titleColor: "451a03", textColor: "78350f", cardBg: "fef3c7" },
+        { name: "Corporate Pro", headerFont: "Open Sans", bodyFont: "Lato", bgColor: "f1f5f9", accentColor: "0ea5e9", titleColor: "0f172a", textColor: "475569", cardBg: "ffffff" },
+        { name: "Futuristic", headerFont: "Orbitron", bodyFont: "Rajdhani", bgColor: "020617", accentColor: "e11d48", titleColor: "f8fafc", textColor: "94a3b8", cardBg: "0f172a" },
+        { name: "Retro Typewriter", headerFont: "Courier New", bodyFont: "Courier", bgColor: "fef08a", accentColor: "ea580c", titleColor: "422006", textColor: "713f12", cardBg: "fde047" },
+        { name: "Minimalist", headerFont: "Roboto", bodyFont: "Poppins", bgColor: "#FFFFFF", accentColor: "#007BFF", titleColor: "#333333", textColor: "#666666", cardBg: "#F9FAFB" },
+        { name: "Neon Night", headerFont: "Audiowide", bodyFont: "Spartan", bgColor: "#0B132B", accentColor: "#4F46E5", titleColor: "#FFFFFF", textColor: "#E3A917", cardBg: "#202C3D" },
+        { name: "Soft Pastel", headerFont: "Lato", bodyFont: "Open Sans", bgColor: "#FEE7E9", accentColor: "#FF6B6B", titleColor: "#332A2D", textColor: "#9897AB", cardBg: "#FEE2DB" },
+        { name: "Indie Handwritten", headerFont: "Caveat", bodyFont: "Josefin Sans", bgColor: "#F8FAFC", accentColor: "#1D435C", titleColor: "#1a202c", textColor: "#718096", cardBg: "#FFFFFF" },
+        { name: "Aqua Wave", headerFont: "Roboto Slab", bodyFont: "Nunito Sans", bgColor: "#E6F7FB", accentColor: "#2dd4bf", titleColor: "#1c2541", textColor: "#3d4866", cardBg: "#f0fce7" },
+        { name: "Savannah Green", headerFont: "Playfair Display SC", bodyFont: "Roboto Condensed", bgColor: "#E6F7FB", accentColor: "#00B894", titleColor: "#1c2541", textColor: "#3d4866", cardBg: "#f0fce7" },
+        { name: "Glowing Purple", headerFont: "Roboto Condensed", bodyFont: "Raleway", bgColor: "#1F2937", accentColor: "#EC4899", titleColor: "#FFFFFF", textColor: "#E5E7EB", cardBg: "#0F172A" },
+        { name: "Sunset Oasis", headerFont: "Sora", bodyFont: "Inter", bgColor: "#fde68a", accentColor: "#e11d48", titleColor: "#332A2D", textColor: "#9897AB", cardBg: "#fef08a" },
+        { name: "Sky Blue Dawn", headerFont: "Nunito Sans", bodyFont: "Roboto Condensed", bgColor: "#E6FEFF", accentColor: "#8B5CF6", titleColor: "#1c2541", textColor: "#3d4866", cardBg: "#f0ece7" },
+        { name: "Dark Neon Gradient", headerFont: "JetBrains Mono", bodyFont: "Fira Code", bgColor: "#090D16", accentColor: "#3B82F6", titleColor: "#e2e8f0", textColor: "#94a3b8", cardBg: "0f172a" }
     ];
 
     const themes = THEME_PRESETS.reduce((acc, preset) => {
-      acc[preset.name] = {
-        bkgd: preset.bgColor.replace('#', ''),
-        titleColor: preset.titleColor.replace('#', ''),
-        textColor: preset.textColor.replace('#', ''),
-        accent: preset.accentColor.replace('#', ''),
-        shapeFill: preset.cardBg.replace('#', ''),
-        fontFace: preset.headerFont.split(',')[0].trim(),
-        bodyFontFace: preset.bodyFont.split(',')[0].trim()
-      };
-      return acc;
+        acc[preset.name] = {
+            bkgd: preset.bgColor.replace('#', ''),
+            titleColor: preset.titleColor.replace('#', ''),
+            textColor: preset.textColor.replace('#', ''),
+            accent: preset.accentColor.replace('#', ''),
+            shapeFill: preset.cardBg.replace('#', ''),
+            fontFace: preset.headerFont.split(',')[0].trim(),
+            bodyFontFace: preset.bodyFont.split(',')[0].trim()
+        };
+        return acc;
     }, {});
 
     let theme = themes[themeName] || themes['Modern Clean'];
@@ -60,11 +70,11 @@ async function generatePptx(slides, title, themeName, slideSize, customThemeObj,
             const enhancedQuery = query.trim() + styleSuffix;
             console.log(`[ImageFetch] Style='${imageStyle || 'isometric_3d'}' | Query: "${enhancedQuery.substring(0, 80)}..."`);
 
-            
+
             // First try local Python diffusers endpoint
             try {
-                const response = await axios.post('http://127.0.0.1:5000/generate-image', 
-                    { prompt: enhancedQuery, steps: 4 }, 
+                const response = await axios.post('http://127.0.0.1:5000/generate-image',
+                    { prompt: enhancedQuery, steps: 4 },
                     { responseType: 'arraybuffer', timeout: 15000 }
                 );
                 const base64 = Buffer.from(response.data, 'binary').toString('base64');
@@ -74,7 +84,7 @@ async function generatePptx(slides, title, themeName, slideSize, customThemeObj,
             } catch (localErr) {
                 console.log(`Local image generation failed/unavailable for "${query}". Falling back to Pollinations AI...`);
             }
-            
+
             // Fallback to Pollinations AI
             const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(enhancedQuery)}?width=800&height=600&nologo=true`;
             const response = await axios.get(url, { responseType: 'arraybuffer' });
@@ -97,7 +107,7 @@ async function generatePptx(slides, title, themeName, slideSize, customThemeObj,
   <rect x="0" y="0" width="800" height="4" fill="#8b5cf6"/>
   <rect x="0" y="596" width="800" height="4" fill="#8b5cf6"/>
   <text x="400" y="280" font-family="sans-serif" font-size="22" fill="#94a3b8" text-anchor="middle" dominant-baseline="middle">🖼</text>
-  <text x="400" y="320" font-family="sans-serif" font-size="16" fill="#64748b" text-anchor="middle" dominant-baseline="middle">${label.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</text>
+  <text x="400" y="320" font-family="sans-serif" font-size="16" fill="#64748b" text-anchor="middle" dominant-baseline="middle">${label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</text>
 </svg>`;
         const b64 = Buffer.from(svg).toString('base64');
         return `data:image/svg+xml;base64,${b64}`;
@@ -123,13 +133,13 @@ async function generatePptx(slides, title, themeName, slideSize, customThemeObj,
     return new Promise((resolve, reject) => {
         const tempDir = path.join(__dirname, '..', 'temp');
         if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
-        
+
         const timestamp = Date.now();
         const inputPath = path.join(tempDir, `input_${timestamp}.json`);
         const outputPath = path.join(tempDir, `output_${timestamp}.pptx`);
-        
+
         fs.writeFileSync(inputPath, JSON.stringify(payload));
-        
+
         const args = [
             path.join(__dirname, 'export_pptx.py'),
             '--input', inputPath,
@@ -139,20 +149,20 @@ async function generatePptx(slides, title, themeName, slideSize, customThemeObj,
         if (customBgObj) {
             args.push('--custom_bg', JSON.stringify(customBgObj));
         }
-        
+
         const venvPython = path.join(__dirname, '..', 'venv', 'bin', 'python3');
         const pythonBin = fs.existsSync(venvPython) ? venvPython : (process.env.PYTHON_PATH || 'python3');
-        
+
         const pythonProcess = spawn(pythonBin, args);
-        
+
         pythonProcess.stdout.on('data', (data) => {
             console.log(`Python Exporter: ${data}`);
         });
-        
+
         pythonProcess.stderr.on('data', (data) => {
             console.error(`Python Exporter Error: ${data}`);
         });
-        
+
         pythonProcess.on('error', (err) => {
             if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
             if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
@@ -169,7 +179,7 @@ async function generatePptx(slides, title, themeName, slideSize, customThemeObj,
                 cleanup();
                 return reject(new Error(`Python process exited with code ${code}`));
             }
-            
+
             try {
                 const buffer = fs.readFileSync(outputPath);
                 cleanup();
@@ -189,7 +199,7 @@ const modify = AutomizerLib.modify;
 async function generateFromTemplate(slides, title, templatePath) {
     const outputDir = path.join(__dirname, '..', 'temp');
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
-    
+
     const automizer = new Automizer({
         templateDir: path.dirname(templatePath),
         outputDir: outputDir
@@ -201,17 +211,17 @@ async function generateFromTemplate(slides, title, templatePath) {
     slides.forEach((slideData, idx) => {
         // Assume Slide 1 is Title, Slide 2 is Content in the Master Template.
         let slideIndex = slideData.layout_type === "Title Slide" ? 1 : 2;
-        
+
         pres.addSlide('master', slideIndex, (slide) => {
-            slide.modifyElement('Title 1', [ modify.setText(slideData.title || '') ]);
-            slide.modifyElement('Title 2', [ modify.setText(slideData.title || '') ]);
-            slide.modifyElement('Title', [ modify.setText(slideData.title || '') ]);
-            
+            slide.modifyElement('Title 1', [modify.setText(slideData.title || '')]);
+            slide.modifyElement('Title 2', [modify.setText(slideData.title || '')]);
+            slide.modifyElement('Title', [modify.setText(slideData.title || '')]);
+
             if (slideData.bullets && slideData.bullets.length > 0) {
                 const bulletText = slideData.bullets.join('\n');
-                slide.modifyElement('Content Placeholder 2', [ modify.setText(bulletText) ]);
-                slide.modifyElement('Text Placeholder 2', [ modify.setText(bulletText) ]);
-                slide.modifyElement('Content', [ modify.setText(bulletText) ]);
+                slide.modifyElement('Content Placeholder 2', [modify.setText(bulletText)]);
+                slide.modifyElement('Text Placeholder 2', [modify.setText(bulletText)]);
+                slide.modifyElement('Content', [modify.setText(bulletText)]);
             }
         });
     });

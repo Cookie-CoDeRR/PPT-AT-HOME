@@ -21,6 +21,9 @@ app.use(cors());
 app.use(express.json());
 app.use('/assets', express.static(path.join(__dirname, 'public', 'assets')));
 
+// Import preview service
+const { generatePreview } = require('./services/previewService');
+
 // Test Connection Endpoint
 // Models list Endpoint
 app.post('/api/models', async (req, res) => {
@@ -394,6 +397,51 @@ app.post('/api/export/drive', upload.single('template'), async (req, res) => {
         res.json({ success: true, driveFileId: driveRes.data.id });
     } catch (error) {
         console.error("Error exporting to Drive:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// --- Preview Endpoints ---
+app.post('/api/preview', async (req, res) => {
+    try {
+        const result = await generatePreview(req.body);
+        res.json(result);
+    } catch (error) {
+        console.error("Error generating preview:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/preview/:hash/:slideIndex', (req, res) => {
+    try {
+        const { hash, slideIndex } = req.params;
+        const fs = require('fs');
+        const path = require('path');
+        const previewDir = path.join(__dirname, 'temp', 'previews', hash);
+        
+        if (!fs.existsSync(previewDir)) {
+            return res.status(404).json({ error: "Preview not found" });
+        }
+        
+        // Find png starting with preview and ending with .png
+        const files = fs.readdirSync(previewDir);
+        const pngFiles = files
+            .filter(f => f.startsWith('preview') && f.endsWith('.png'))
+            .sort((a, b) => {
+                const numA = parseInt(a.replace(/\\D/g, '') || '0', 10);
+                const numB = parseInt(b.replace(/\\D/g, '') || '0', 10);
+                return numA - numB;
+            });
+            
+        const targetFile = pngFiles[parseInt(slideIndex, 10)];
+        if (!targetFile) {
+            return res.status(404).json({ error: "Slide preview not found" });
+        }
+        
+        res.setHeader('Content-Type', 'image/png');
+        res.sendFile(path.join(previewDir, targetFile));
+    } catch (error) {
+        console.error("Error serving preview slide:", error);
         res.status(500).json({ error: error.message });
     }
 });
