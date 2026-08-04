@@ -218,6 +218,59 @@ app.post('/api/generate-incremental', async (req, res) => {
     }
 });
 
+// Master Architecture Endpoint
+app.post('/api/generate-presentation', async (req, res) => {
+    try {
+        const { prompt, slide_count, temperature, theme_id, baseUrl, model } = req.body;
+        
+        const { THEMES } = require('./shared/themeEngine');
+        const theme = THEMES[theme_id] || THEMES.dark_glass;
+
+        // Step 1: Algorithmic Deep Sampling
+        const algorithmicRouter = require('./services/algorithmicRouter');
+        const blueprintSequence = algorithmicRouter.selectBlueprint(slide_count || 5, temperature || 0.6);
+
+        // Step 2: LLM Call with Retry & Sanitizer
+        const { generateSlides } = require('./services/llmService');
+        const rawLLMOutput = await generateSlides(prompt, blueprintSequence, baseUrl, model, temperature);
+        
+        const { validateAndHeal } = require('./services/jsonHealer');
+        const validatedSlidesJson = await validateAndHeal(rawLLMOutput, baseUrl, model);
+        const validatedSlides = validatedSlidesJson.slides;
+
+        // Step 3: DSL Interpretation
+        const { parseSlideToDSL } = require('./shared/layoutInterpreter');
+        const dslPresentation = validatedSlides.map(slide => 
+            parseSlideToDSL(slide)
+        );
+
+        // Step 4: Export Native PPTX via PptxGenJS
+        const { generatePPTX } = require('./services/pptxExporter');
+        const path = require('path');
+        const fileName = `deck_${Date.now()}.pptx`;
+        const exportPath = path.join(__dirname, 'public', 'exports', fileName);
+        
+        await generatePPTX(dslPresentation, theme, exportPath);
+
+        // Save to DB so history works (using legacy format for compatibility if needed)
+        const dbId = db.savePresentation(validatedSlidesJson.title || "Untitled Presentation", validatedSlidesJson, theme.name);
+
+        // Step 5: Respond to Client
+        res.json({
+            success: true,
+            id: dbId,
+            downloadUrl: `/exports/${fileName}`,
+            slides: validatedSlides,
+            dslTree: dslPresentation,
+            themeUsed: theme
+        });
+
+    } catch (error) {
+        console.error("Pipeline Failure:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Image Style Options Endpoint
 app.get('/api/image-styles', (req, res) => {
     const { IMAGE_STYLE_PRESETS } = require('./services/pptService');
