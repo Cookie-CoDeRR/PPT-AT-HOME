@@ -1,5 +1,5 @@
 const OpenAI = require('openai');
-const { getBlueprint } = require('./layoutRouter');
+const { selectBlueprint } = require('./algorithmicRouter');
 const { generateImage } = require('./imageService');
 
 const LAYOUT_SCHEMAS = {
@@ -19,8 +19,71 @@ const LAYOUT_SCHEMAS = {
     "summary_takeaways": '{\n      "slide_number": __SLIDE_NUM__,\n      "slide_type": "summary_takeaways",\n      "slide_category": "...",\n      "title": "...",\n      "bullets": ["...", "..."]\n    }',
     "default": '{\n      "slide_number": __SLIDE_NUM__,\n      "slide_type": "default",\n      "slide_category": "...",\n      "title": "...",\n      "subtitle": "...",\n      "bullets": ["..."]\n    }'
 };
+async function generateSlides(prompt, blueprint, baseUrl = null, modelName = null, temperature = 0.6) {
+    let finalBaseUrl = baseUrl || 'http://127.0.0.1:1234/v1';
+    if (!finalBaseUrl.endsWith('/v1') && !finalBaseUrl.endsWith('/api')) {
+        finalBaseUrl = finalBaseUrl.replace(/\/$/, '') + '/v1';
+    }
 
-let previousLayoutSequence = [];
+    const openai = new OpenAI({
+        baseURL: finalBaseUrl,
+        apiKey: 'local',
+    });
+
+    const blueprintString = JSON.stringify(blueprint);
+    const slideSchemasArray = blueprint.map((layoutType, index) => {
+        const schemaTemplate = LAYOUT_SCHEMAS[layoutType] || LAYOUT_SCHEMAS["default"];
+        return schemaTemplate.replace('__SLIDE_NUM__', index + 1);
+    });
+    const combinedSchemas = slideSchemasArray.join(',\n    ');
+
+    const systemPrompt = `You are an expert presentation data architect. Your task is to generate a highly engaging PowerPoint outline.
+
+You MUST structure your JSON output to perfectly match the following layout sequence: ${blueprintString}.
+Slide 1 MUST be ${blueprint[0]}, Slide 2 MUST be ${blueprint[1]}, etc. Do NOT change this order. Fill the content based on the user's topic.
+
+CRITICAL SYSTEM DIRECTIVES:
+1. DATA VISUALIZATION MANDATE: You must include at least one bento_grid, chart_pie, or data_table in every generation (if applicable).
+2. SLIDE CATEGORY: Every slide MUST include a "slide_category" field.
+3. CONTENT DENSITY: Make it detailed and substantive.
+
+You MUST return a JSON object with this EXACT schema, matching the fields to the chosen slide_type:
+{
+  "title": "Main title",
+  "slides": [
+    ${combinedSchemas}
+  ]
+}
+
+DO NOT wrap your response in markdown code blocks. Return ONLY valid, parseable JSON. Ensure all keys and string values are properly double-quoted.`;
+
+    try {
+        const response = await openai.chat.completions.create({
+            model: modelName || 'llama3.2',
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: prompt }
+            ],
+            temperature: temperature,
+            max_tokens: 8192,
+            response_format: { type: "text" }
+        });
+
+        const content = response.choices[0].message?.content || "";
+        
+        // Robust extraction
+        const cleaned = content.replace(/```json/g, '').replace(/```/g, '').trim();
+        const match = cleaned.match(/\{[\s\S]*\}/);
+        
+        if (match) {
+            return JSON.parse(match[0]);
+        }
+        throw new Error("Failed to parse valid JSON from LLM output.");
+    } catch (e) {
+        console.error("LLM Generation failed:", e.message);
+        throw e;
+    }
+}
 
 async function generateJsonSlides(prompt, slideCount, tone, baseUrl, modelName, contextText = "", density = "Detailed", includeImages = false, referenceImage = null, temperature = 0.6, contentType = "presentation", language = "English", slideSize = "", graphicStyle = "", graphicCount = 1, graphicQuality = "Standard") {
     let finalBaseUrl = baseUrl || 'http://127.0.0.1:1234/v1';
@@ -50,7 +113,7 @@ async function generateJsonSlides(prompt, slideCount, tone, baseUrl, modelName, 
         apiKey: 'local',
     });
 
-    const blueprint = getBlueprint(prompt, slideCount, temperature);
+    const blueprint = selectBlueprint(slideCount, temperature);
     const blueprintString = JSON.stringify(blueprint);
 
     const antiRepetitionRule = previousLayoutSequence.length > 0
@@ -480,5 +543,6 @@ module.exports = {
     generateJsonSlides,
     generateIncrementalSlide,
     validateSlides,
+    generateSlides,
     REQUIRED_KEYS
 };

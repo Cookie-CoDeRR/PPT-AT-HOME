@@ -146,12 +146,12 @@ function getFallbackSequence(slideCount) {
     return seq;
 }
 
-function getBlueprint(userPrompt, requestedSlides, temperature) {
-    const intent = classifyIntent(userPrompt || "");
+function selectBlueprint(requestedSlides, temperature) {
+    const intent = "standard"; // Simplified intent for now, or could pass prompt
     const count = parseInt(requestedSlides) || 5;
     const temp = parseFloat(temperature) || 0.6;
     
-    console.log(`[LayoutRouter] Generating blueprint (prompt="${userPrompt || ''}", slides=${count}, temp=${temp}, intent='${intent}')`);
+    console.log(`[LayoutRouter] Generating blueprint (slides=${count}, temp=${temp}, intent='${intent}')`);
     
     let seq;
     if (temp <= 0.3) {
@@ -215,6 +215,6 @@ function getBlueprint(userPrompt, requestedSlides, temperature) {
 }
 
 module.exports = {
-    getBlueprint,
+    selectBlueprint,
     classifyIntent
 };

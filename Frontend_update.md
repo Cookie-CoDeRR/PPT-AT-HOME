@@ -1,62 +1,134 @@
-# Frontend Integration Guide & Updates
+# Frontend Update: New Pages & Components
 
-This document outlines the required frontend updates to integrate with the latest backend API changes. 
-
-## 1. Image Style Selection
-The frontend selection UI needs to support image styles:
-- **On load:** Call `GET /api/image-styles` to populate the image style picker.
-- **On generate:** Include `imageStyle: "<id>"` in the JSON body when calling `POST /api/generate-pptx` (and `POST /api/preview`).
-
-## 2. Web Search Integration (RAG)
-- **UI Update:** Add a "Web Search" toggle in the generation form.
-- **API Update:** When enabled, send `useWebRag: true` in the `POST /api/generate-json` body.
-
-## 3. Accurate Slide Preview (WYSIWYG) - NEW ✨
-To solve the visual mismatch between the React preview and the actual downloaded PPTX, the backend now provides a true WYSIWYG preview using LibreOffice headless rendering.
-
-### API Contract
-
-**`POST /api/preview`**
-Accepts the exact same JSON body as `POST /api/generate-pptx`.
-
-**Request Body:**
-```json
-{
-  "slides": [...],
-  "title": "My Presentation",
-  "theme": "Modern Clean",
-  "slideSize": "LAYOUT_16x9",
-  "customBackground": null,
-  "customTheme": null,
-  "imageStyle": "isometric_3d"
-}
-```
-
-**Response:**
-```json
-{
-  "hash": "abc123def456...",
-  "slides": [
-    { "index": 0, "url": "/api/preview/abc123def456/0" },
-    { "index": 1, "url": "/api/preview/abc123def456/1" }
-  ]
-}
-```
-
-**`GET /api/preview/:hash/:slideIndex`**
-Returns the `image/png` preview for that specific slide.
-
-### Action Required for Workspace.jsx
-1. **Trigger Preview:** After slides are generated (or when a user clicks a "Preview Accurate" button), send a request to `POST /api/preview`.
-2. **Render Previews:** Map the returned `url`s to each slide card. Show these PNGs inside the slide card containers. You can either replace the `<SlideRenderer>` React components entirely or display the PNG as an overlay above them.
-
-## 4. Pending Frontend Fixes (Refer to pptx_audit.md)
-- **SlideRenderer missing handlers:** Issues 1 and 5 from the audit involve missing slide type handlers in `SlideRenderer.jsx` (e.g., `title_hero`, `two_column_image`). These need to be added to the React frontend to properly map to the new layouts, especially if the React preview is used alongside the new LibreOffice accurate preview.
+> **For Frontend Engineers:** This document summarises all new pages, components, and routing changes made to the frontend codebase. Review this before merging any new feature branches.
 
 ---
 
-### Priority Order for Backend (Internal Reference):
-1. ✅ Accept and log `contentType` in `/api/generate-json`
-2. ✅ Implement `pasteMode` switching in `llmService.js`
-3. ⬜ Add `graphic` content type routing to an image generation service
-4. ⬜ Adjust LLM prompts for `webpage`, `document`, `social`
+## Summary of New Components
+
+| Component | File | Status | Purpose |
+|-----------|------|--------|---------|
+| PasteTextLauncher | frontend/src/components/PasteTextLauncher.jsx | NEW | Paste-in-text start/greeting page |
+| CreationLauncher | frontend/src/components/CreationLauncher.jsx | Extended | AI Generate page (all 5 content types) |
+| HomePage | frontend/src/components/HomePage.jsx | Existing | Mode selector hub |
+| WizardForm | frontend/src/components/WizardForm.jsx | Existing | Template creation wizard |
+| Workspace | frontend/src/components/Workspace.jsx | Existing | Slide editor workspace |
+
+---
+
+## 1. Default Start Page — PasteTextLauncher.jsx
+
+The app now opens on the Paste in text page.
+
+Change in App.jsx:
+  - const [view, setView] = useState("create");
+  + const [view, setView] = useState("paste");
+
+Navigation flow:
+  App opens -> PasteTextLauncher (paste)
+                     Back button
+                HomePage (home)
+               /     |      \
+          Generate Template  Import
+
+### What PasteTextLauncher renders:
+- Title: Paste in text with icon
+- Content type tabs: Presentation | Webpage | Document | Social | Graphic (NEW badge)
+- Context-sensitive sub-option dropdown:
+  - Presentation -> Orientation (Landscape 16:9 / Portrait 9:16 / Square 1:1)
+  - Document -> Document size (Default / A4 / US Letter)
+  - Webpage -> Language (English UK, English US, Spanish, French, German, Hindi, Japanese, Chinese)
+  - Social -> Language (same list)
+  - Graphic -> no sub-option
+- Two-column layout:
+  - Left: Large textarea (Type or paste in content here)
+  - Right: Optional section-by-section control tip panel with separator example
+- Three generation mode radio buttons:
+  - Generate from notes or an outline
+  - Summarize long text or document
+  - Preserve this exact text
+- CTA: Continue to prompt editor button (disabled until 10+ chars)
+- Footer: You can also import files link
+
+---
+
+## 2. CreationLauncher.jsx — Extended Content Types
+
+The Generate page now supports 5 content types (previously only Presentation):
+
+| Tab | Status | Config pills shown |
+|-----|--------|-------------------|
+| Presentation | Active | Slides, Theme, Orientation, Tone, Model |
+| Webpage | Active | Sections, Language, Model |
+| Document | Active | Sections, Document Size, Language, Model |
+| Social | Active | Slides, Theme, Orientation, Language, Model |
+| Graphic | Active (NEW badge) | Style, Aspect, Count, Quality, Model |
+
+### Graphic tab specific features:
+- Image style horizontal scroller: None / Scene / Illustration / Flat Line Art / Technical Line / Modern Art
+- Out-of-credits banner (orange) with Upgrade button
+- Or, start with a template divider
+- Accordion step 1 (open): Infographic, Poster, Team Structure, Invite, Calendar, Diagram, Logo, Social Media Post, Something else
+- Accordion steps 2 and 3 (closed): Pick a layout / Theme and prompt
+- Start a new blank design link
+
+---
+
+## 3. App.jsx — Routing
+
+New view state paste has been added:
+
+  if (modeId === "template") setView("wizard");
+  else if (modeId === "paste") setView("paste");  // NEW
+  else setView("create");
+
+---
+
+## 4. Scroll Fix — App.jsx
+
+Fixed a bug where long content was cut off at the top. Main container changed from
+flex items-center justify-center to flex flex-col items-center.
+
+---
+
+## 5. Payloads Sent to Backend (POST /api/generate-json)
+
+From PasteTextLauncher:
+{
+  prompt: pasted text,
+  pasteMode: generate_outline | summarize | preserve,
+  contentType: presentation | webpage | document | social | graphic,
+  slideCount: 10,
+  slideSize: Default | A4 | US Letter | Landscape (16:9) | etc,
+  language: English (UK) | English (US) | Spanish | etc,
+  tone: Professional/Corporate,
+  theme: Modern Dark Tech,
+  templateType: default,
+  density: Detailed,
+  includeImages: true
+}
+
+From CreationLauncher (Graphic mode):
+{
+  prompt: ...,
+  contentType: graphic,
+  slideSize: 1:1,
+  graphicStyle: none | scene | illustration | flat_line_art | technical_line | modern_art,
+  graphicCount: 1-4,
+  graphicQuality: Standard | HD,
+  model: model-name,
+  temperature: 0.6
+}
+
+---
+
+## 6. CSS Classes Used (must be in index.css)
+
+- .glass-panel: Glassmorphism card style
+- .hide-scrollbar: Hides scrollbar for horizontal scroll areas (image style row)
+
+---
+
+## 7. Dependencies (no new packages)
+
+All new components use existing: react, framer-motion, lucide-react, axios, react-dropzone
