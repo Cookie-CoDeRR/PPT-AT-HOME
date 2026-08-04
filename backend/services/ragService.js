@@ -4,6 +4,9 @@ const officeParser = require('officeparser');
 const lancedb = require('@lancedb/lancedb');
 const path = require('path');
 const OpenAI = require('openai');
+const axios = require('axios');
+let cheerio;
+try { cheerio = require('cheerio'); } catch(e) { cheerio = null; }
 
 const DB_PATH = path.join(__dirname, '..', '.lancedb');
 const TABLE_NAME = 'documents';
@@ -135,7 +138,116 @@ async function searchContext(query, baseUrl, k = 3) {
     }
 }
 
+// ─── Web RAG: Google-style pseudo-RAG ────────────────────────────────────────
+// Searches DuckDuckGo, scrapes the top result pages, and returns relevant
+// text snippets to inject into the LLM system prompt as grounding context.
+async function searchWeb(query, maxResults = 3, maxCharsTotal = 1500) {
+    try {
+        console.log(`[WebRAG] Searching web for: "${query}"`);
+
+        // Step 1: Hit DuckDuckGo HTML search to get result URLs
+        const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+        const ddgRes = await axios.get(ddgUrl, {
+            timeout: 8000,
+            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PPT-AT-HOME/1.0)' }
+        });
+
+        let urls = [];
+        if (cheerio) {
+            const $ = cheerio.load(ddgRes.data);
+            $('a.result__url, .result__a').each((i, el) => {
+                if (urls.length >= maxResults) return false;
+                const href = $(el).attr('href');
+                if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
+                    // Skip known unhelpful domains
+                    const skip = ['youtube.com', 'twitter.com', 'facebook.com', 'instagram.com', 'reddit.com'];
+                    if (!skip.some(d => href.includes(d))) {
+                        urls.push(href);
+                    }
+                }
+            });
+            // Also extract from DuckDuckGo redirect links
+            if (urls.length === 0) {
+                $('a[href]').each((i, el) => {
+                    if (urls.length >= maxResults) return false;
+                    const href = $(el).attr('href') || '';
+                    const uddg = new URLSearchParams(href.split('?')[1] || '').get('uddg');
+                    if (uddg && uddg.startsWith('http')) {
+                        const skip = ['youtube.com', 'twitter.com', 'facebook.com', 'instagram.com', 'reddit.com'];
+                        if (!skip.some(d => uddg.includes(d))) urls.push(uddg);
+                    }
+                });
+            }
+        } else {
+            // cheerio not available — try to extract URLs with regex
+            const matches = ddgRes.data.matchAll(/uddg=([^&"']+)/g);
+            for (const m of matches) {
+                if (urls.length >= maxResults) break;
+                try {
+                    const decoded = decodeURIComponent(m[1]);
+                    if (decoded.startsWith('http')) urls.push(decoded);
+                } catch (_) {}
+            }
+        }
+
+        console.log(`[WebRAG] Got ${urls.length} URLs from DuckDuckGo`);
+        if (urls.length === 0) return "";
+
+        // Step 2: Scrape each URL and extract plain text
+        const snippets = [];
+        let totalChars = 0;
+        const charsPerPage = Math.floor(maxCharsTotal / maxResults);
+
+        for (const url of urls) {
+            if (totalChars >= maxCharsTotal) break;
+            try {
+                const pageRes = await axios.get(url, {
+                    timeout: 6000,
+                    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PPT-AT-HOME/1.0)' },
+                    maxContentLength: 500_000   // cap to 500KB per page
+                });
+
+                let text = '';
+                if (cheerio) {
+                    const $ = cheerio.load(pageRes.data);
+                    // Remove noisy elements
+                    $('script, style, nav, footer, header, aside, noscript, iframe').remove();
+                    text = $('body').text().replace(/\s+/g, ' ').trim();
+                } else {
+                    // Regex-based strip as fallback
+                    text = pageRes.data
+                        .replace(/<script[\s\S]*?<\/script>/gi, '')
+                        .replace(/<style[\s\S]*?<\/style>/gi, '')
+                        .replace(/<[^>]+>/g, ' ')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                }
+
+                if (text.length > 50) {
+                    const snippet = text.slice(0, charsPerPage);
+                    snippets.push(`[Source: ${url}]\n${snippet}`);
+                    totalChars += snippet.length;
+                    console.log(`[WebRAG] Scraped ${snippet.length} chars from ${url}`);
+                }
+            } catch (pageErr) {
+                console.log(`[WebRAG] Skipped ${url}: ${pageErr.message}`);
+            }
+        }
+
+        if (snippets.length === 0) return "";
+
+        const context = snippets.join('\n\n---\n\n');
+        console.log(`[WebRAG] Injecting ${context.length} chars of web context into LLM prompt ✅`);
+        return context;
+
+    } catch (e) {
+        console.warn(`[WebRAG] Search failed gracefully: ${e.message}`);
+        return ""; // Never block generation
+    }
+}
+
 module.exports = {
     processAndStoreDocument,
-    searchContext
+    searchContext,
+    searchWeb
 };

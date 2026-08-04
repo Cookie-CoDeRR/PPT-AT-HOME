@@ -6,7 +6,7 @@ const { generatePptx } = require('./services/pptService');
 const OpenAI = require('openai');
 const multer = require('multer');
 const { google } = require('googleapis');
-const { processAndStoreDocument, searchContext } = require('./services/ragService');
+const { processAndStoreDocument, searchContext, searchWeb } = require('./services/ragService');
 const db = require('./database/db');
 const axios = require('axios');
 
@@ -137,15 +137,23 @@ app.post('/api/upload-context', upload.single('file'), async (req, res) => {
 // Generate JSON Slides Endpoint
 app.post('/api/generate-json', async (req, res) => {
     try {
-        const { prompt, slideCount, tone, baseUrl, model, useRag, theme, density, includeImages, referenceImage, temperature, contentType, language, slideSize, graphicStyle, graphicCount, graphicQuality } = req.body;
+        const { prompt, slideCount, tone, baseUrl, model, useRag, useWebRag, theme, density, includeImages, referenceImage, temperature, contentType, language, slideSize, graphicStyle, graphicCount, graphicQuality } = req.body;
         
         if (!prompt || !tone) {
             return res.status(400).json({ error: "Missing required parameters" });
         }
 
+        // Run document RAG and web RAG concurrently if both requested
         let contextText = "";
-        if (useRag) {
-            contextText = await searchContext(prompt, baseUrl, 3);
+        const [docContext, webContext] = await Promise.all([
+            useRag    ? searchContext(prompt, baseUrl, 3) : Promise.resolve(""),
+            useWebRag ? searchWeb(prompt)                : Promise.resolve("")
+        ]);
+
+        // Merge: document context first (authoritative), then web context
+        if (docContext) contextText += docContext;
+        if (webContext) {
+            contextText += (contextText ? '\n\n--- Web Search Context ---\n\n' : '') + webContext;
         }
 
         const slidesJson = await generateJsonSlides(
@@ -207,6 +215,17 @@ app.post('/api/generate-incremental', async (req, res) => {
     }
 });
 
+// Image Style Options Endpoint
+app.get('/api/image-styles', (req, res) => {
+    const { IMAGE_STYLE_PRESETS } = require('./services/pptService');
+    const styles = Object.keys(IMAGE_STYLE_PRESETS).map(key => ({
+        id: key,
+        label: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        preview: IMAGE_STYLE_PRESETS[key].replace(/^, /, '').split(',')[0]
+    }));
+    res.json({ styles });
+});
+
 // Generate PPTX Endpoint
 app.post('/api/generate-pptx', upload.single('template'), async (req, res) => {
     try {
@@ -217,7 +236,7 @@ app.post('/api/generate-pptx', upload.single('template'), async (req, res) => {
             slides = req.body.slides;
         }
         
-        const { title, theme, templateType, slideSize, cloudTemplateUrl, customTheme, customBackground } = req.body;
+        const { title, theme, templateType, slideSize, cloudTemplateUrl, customTheme, customBackground, imageStyle } = req.body;
         
         let customThemeObj = null;
         if (customTheme) {
@@ -270,7 +289,7 @@ app.post('/api/generate-pptx', upload.single('template'), async (req, res) => {
         } else {
             // Default pptxgenjs engine
             const { generatePptx } = require('./services/pptService');
-            pptxBuffer = await generatePptx(slides, title, theme, slideSize, customThemeObj, customBgObj);
+            pptxBuffer = await generatePptx(slides, title, theme, slideSize, customThemeObj, customBgObj, imageStyle);
         }
         
         res.setHeader('Content-Disposition', 'attachment; filename=presentation.pptx');
@@ -299,7 +318,7 @@ app.post('/api/export/drive', upload.single('template'), async (req, res) => {
             throw new Error("Google Drive OAuth is not configured. Please see backend/server.js to add your API credentials.");
         }
 
-        const { slides, title, theme, templateType, slideSize, cloudTemplateUrl, customTheme, customBackground } = req.body;
+        const { slides, title, theme, templateType, slideSize, cloudTemplateUrl, customTheme, customBackground, imageStyle } = req.body;
         let slidesJson;
         try {
             slidesJson = typeof slides === 'string' ? JSON.parse(slides) : slides;
@@ -352,7 +371,7 @@ app.post('/api/export/drive', upload.single('template'), async (req, res) => {
             }
         } else {
             const { generatePptx } = require('./services/pptService');
-            pptxBuffer = await generatePptx(slidesJson, title, theme, slideSize, customThemeObj, customBgObj);
+            pptxBuffer = await generatePptx(slidesJson, title, theme, slideSize, customThemeObj, customBgObj, imageStyle);
         }
 
         const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
