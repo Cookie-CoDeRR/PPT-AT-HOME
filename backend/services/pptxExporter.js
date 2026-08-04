@@ -1,7 +1,7 @@
 const pptxgen = require('pptxgenjs');
 const fs = require('fs');
 
-async function renderPptxDSL(slide, dslTree, theme, fetchImageBase64) {
+async function renderPptxDSL(slide, dslTree, theme, fetchImageBase64, pres) {
     if (!dslTree) return;
 
     // Helper to resolve theme color or fallback to raw
@@ -32,9 +32,9 @@ async function renderPptxDSL(slide, dslTree, theme, fetchImageBase64) {
             
             if (opts.radius) {
                 shapeOpts.rectRadius = opts.radius;
-                slide.addShape(slide.pres.shapes.ROUNDED_RECTANGLE, shapeOpts);
+                slide.addShape(pres.ShapeType.roundRect, shapeOpts);
             } else {
-                slide.addShape(slide.pres.shapes.RECTANGLE, shapeOpts);
+                slide.addShape(pres.ShapeType.rect, shapeOpts);
             }
         } 
         else if (type === "text_block") {
@@ -68,7 +68,7 @@ async function renderPptxDSL(slide, dslTree, theme, fetchImageBase64) {
                 slide.addImage({ data: base64, x: opts.x, y: opts.y, w: opts.w, h: opts.h, sizing: { type: opts.mode || "crop", w: opts.w, h: opts.h } });
             } else {
                 // Defensive Fallback Crop
-                slide.addShape(slide.pres.shapes.ROUNDED_RECTANGLE, {
+                slide.addShape(pres.ShapeType.roundRect, {
                     x: opts.x, y: opts.y, w: opts.w, h: opts.h,
                     fill: { color: "333333" },
                     line: { color: "666666", width: 1 }
@@ -85,7 +85,7 @@ async function renderPptxDSL(slide, dslTree, theme, fetchImageBase64) {
                 labels: node.data.labels || [],
                 values: node.data.values || []
             }];
-            const cType = node.chartType === "pie" ? slide.pres.ChartType.pie : slide.pres.ChartType.bar;
+            const cType = node.chartType === "pie" ? pres.ChartType.pie : pres.ChartType.bar;
             slide.addChart(cType, chartData, {
                 x: opts.x, y: opts.y, w: opts.w, h: opts.h,
                 showLegend: true, legendPos: 'b',
@@ -136,7 +136,7 @@ async function generatePPTX(dslPresentation, theme, exportPath, fetchImageBase64
 
     for (const slideDSL of dslPresentation) {
         const slide = pres.addSlide({ masterName: "MASTER_SLIDE" });
-        await renderPptxDSL(slide, slideDSL, theme, fetchImageBase64);
+        await renderPptxDSL(slide, slideDSL, theme, fetchImageBase64, pres);
     }
 
     // Write to disk
@@ -145,7 +145,28 @@ async function generatePPTX(dslPresentation, theme, exportPath, fetchImageBase64
     return exportPath;
 }
 
+async function generatePPTXBuffer(dslPresentation, theme, fetchImageBase64) {
+    const pres = new pptxgen();
+    pres.layout = "LAYOUT_16x9"; // Widescreen
+
+    // Set master slide background
+    pres.defineSlideMaster({
+        title: "MASTER_SLIDE",
+        background: { color: theme.bg || "0B0F19" }
+    });
+
+    for (const slideDSL of dslPresentation) {
+        const slide = pres.addSlide({ masterName: "MASTER_SLIDE" });
+        await renderPptxDSL(slide, slideDSL, theme, fetchImageBase64, pres);
+    }
+
+    // Write to buffer
+    const buffer = await pres.write('nodebuffer');
+    return buffer;
+}
+
 module.exports = {
     generatePPTX,
+    generatePPTXBuffer,
     renderPptxDSL
 };
