@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { generateJsonSlides } = require('./services/llmService');
+const { generateSlideContent } = require('./services/llmService');
 const { generatePptx } = require('./services/pptService');
 const OpenAI = require('openai');
 const multer = require('multer');
@@ -146,11 +146,11 @@ app.post('/api/generate-json', async (req, res) => {
             return res.status(400).json({ error: "Missing required parameters" });
         }
 
-        // Run document RAG and web RAG concurrently if both requested
+        // Run document RAG and web RAG concurrently (Web RAG is default now)
         let contextText = "";
         const [docContext, webContext] = await Promise.all([
-            useRag    ? searchContext(prompt, baseUrl, 3) : Promise.resolve(""),
-            useWebRag ? searchWeb(prompt)                : Promise.resolve("")
+            useRag ? searchContext(prompt, baseUrl, 3) : Promise.resolve(""),
+            searchWeb(prompt) // Always fetch real-time news/context
         ]);
 
         // Merge: document context first (authoritative), then web context
@@ -159,24 +159,22 @@ app.post('/api/generate-json', async (req, res) => {
             contextText += (contextText ? '\n\n--- Web Search Context ---\n\n' : '') + webContext;
         }
 
-        const slidesJson = await generateJsonSlides(
+        // Get blueprint from fine-tuned Router
+        const { getDetailedBlueprint } = require('./services/blueprintService');
+        const blueprintSequence = await getDetailedBlueprint(prompt, slideCount || 1);
+
+        const { logGeneration } = require('./services/logger');
+        logGeneration(prompt, webContext, blueprintSequence);
+
+        const slidesArray = await generateSlideContent(
             prompt, 
-            slideCount || 1, 
-            tone, 
-            baseUrl, 
-            model, 
-            contextText, 
-            density || "Detailed", 
-            includeImages || false,
-            referenceImage,
+            blueprintSequence,
+            baseUrl,
+            model,
             temperature || 0.6,
-            contentType || "presentation",
-            language,
-            slideSize,
-            graphicStyle,
-            graphicCount,
-            graphicQuality
+            contextText
         );
+        const slidesJson = { title: prompt, slides: slidesArray };
         
         const presTheme = theme || "Modern Minimalist";
         const dbId = db.savePresentation(slidesJson.title || "Untitled Presentation", slidesJson, presTheme);
@@ -226,13 +224,20 @@ app.post('/api/generate-presentation', async (req, res) => {
         const { THEMES } = require('./shared/themeEngine');
         const theme = THEMES[theme_id] || THEMES.dark_glass;
 
-        // Step 1: Algorithmic Deep Sampling
-        const algorithmicRouter = require('./services/algorithmicRouter');
-        const blueprintSequence = algorithmicRouter.selectBlueprint(slide_count || 5, temperature || 0.6);
+        // Step 1: Get Structural Blueprint from Fine-Tuned 1.5B Router
+        const { getDetailedBlueprint } = require('./services/blueprintService');
+        const blueprintSequence = await getDetailedBlueprint(prompt, slide_count || 5);
+
+        // Fetch Web RAG Context automatically (Default behavior)
+        const { searchWeb } = require('./services/ragService');
+        const webContext = await searchWeb(prompt);
 
         // Step 2: LLM Call with Retry & Sanitizer
+        const { logGeneration } = require('./services/logger');
+        logGeneration(prompt, webContext, blueprintSequence);
+
         const { generateSlides } = require('./services/llmService');
-        const rawLLMOutput = await generateSlides(prompt, blueprintSequence, baseUrl, model, temperature);
+        const rawLLMOutput = await generateSlides(prompt, blueprintSequence, baseUrl, model, temperature, webContext);
         
         const { validateAndHeal } = require('./services/jsonHealer');
         const validatedSlidesJson = await validateAndHeal(rawLLMOutput, baseUrl, model);
@@ -343,9 +348,25 @@ app.post('/api/generate-pptx', upload.single('template'), async (req, res) => {
                 if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
             }
         } else {
-            // Default pptxgenjs engine
-            const { generatePptx } = require('./services/pptService');
-            pptxBuffer = await generatePptx(slides, title, theme, slideSize, customThemeObj, customBgObj, imageStyle);
+            // New JS Exporter (PptxGenJS via DSL)
+            const { parseSlideToDSL } = require('./shared/layoutInterpreter');
+            const { THEMES } = require('./shared/themeEngine');
+            const { generatePPTXBuffer } = require('./services/pptxExporter');
+            
+            // Reconstruct the theme (handle Custom theme)
+            let resolvedTheme = THEMES[theme] || THEMES.dark_glass;
+            if (theme === 'Custom' && customThemeObj) {
+                resolvedTheme = { ...resolvedTheme, ...customThemeObj };
+            }
+            if (customBgObj && customBgObj.value) {
+                resolvedTheme.bg = customBgObj.value.replace('#', '');
+            }
+
+            // Map slides to DSL
+            const dslPresentation = slides.map(slide => parseSlideToDSL(slide));
+
+            // Generate buffer
+            pptxBuffer = await generatePPTXBuffer(dslPresentation, resolvedTheme);
         }
         
         res.setHeader('Content-Disposition', 'attachment; filename=presentation.pptx');
@@ -426,8 +447,25 @@ app.post('/api/export/drive', upload.single('template'), async (req, res) => {
                 if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
             }
         } else {
-            const { generatePptx } = require('./services/pptService');
-            pptxBuffer = await generatePptx(slidesJson, title, theme, slideSize, customThemeObj, customBgObj, imageStyle);
+            // New JS Exporter (PptxGenJS via DSL)
+            const { parseSlideToDSL } = require('./shared/layoutInterpreter');
+            const { THEMES } = require('./shared/themeEngine');
+            const { generatePPTXBuffer } = require('./services/pptxExporter');
+            
+            // Reconstruct the theme (handle Custom theme)
+            let resolvedTheme = THEMES[theme] || THEMES.dark_glass;
+            if (theme === 'Custom' && customThemeObj) {
+                resolvedTheme = { ...resolvedTheme, ...customThemeObj };
+            }
+            if (customBgObj && customBgObj.value) {
+                resolvedTheme.bg = customBgObj.value.replace('#', '');
+            }
+
+            // Map slides to DSL
+            const dslPresentation = slidesJson.map(slide => parseSlideToDSL(slide));
+
+            // Generate buffer
+            pptxBuffer = await generatePPTXBuffer(dslPresentation, resolvedTheme);
         }
 
         const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
