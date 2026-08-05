@@ -99,6 +99,7 @@ function App() {
       });
       setSlidesJson(response.data.slides);
       setTitle(response.data.title);
+      setTheme(response.data.theme || formData.theme);
       setDbId(response.data.id);
       setView('workspace');
     } catch (err) {
@@ -111,7 +112,7 @@ function App() {
   const handleSelectHistory = (historyItem) => {
     setSlidesJson(historyItem.slides_json.slides || historyItem.slides_json);
     setTitle(historyItem.title);
-    setTheme(historyItem.theme);
+    setTheme(historyItem.slides_json?.theme || historyItem.theme);
     setDbId(historyItem.id);
     setTemplateType('default');
     setShowHistory(false);
@@ -253,6 +254,7 @@ function App() {
               onCreateNew={() => setView('create-new')}
               onSelectMode={handleSelectMode}
               onShowHistory={() => setShowHistory(true)}
+              onOpenDocument={(doc) => handleSelectHistory(doc)}
             />
         )}
 

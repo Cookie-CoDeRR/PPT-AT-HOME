@@ -246,8 +246,54 @@ async function searchWeb(query, maxResults = 2, maxCharsTotal = 600) {
     }
 }
 
+// Scrape URL specifically for returning text to frontend import
+async function scrapeUrlForImport(url) {
+    try {
+        const pageRes = await axios.get(url, {
+            timeout: 8000,
+            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PPT-AT-HOME/1.0)' },
+            maxContentLength: 1_000_000 // 1MB limit
+        });
+
+        let text = '';
+        let title = '';
+        
+        if (cheerio) {
+            const $ = cheerio.load(pageRes.data);
+            title = $('title').text().trim() || url;
+            // Remove noisy elements
+            $('script, style, nav, footer, header, aside, noscript, iframe, svg').remove();
+            text = $('body').text().replace(/\s+/g, ' ').trim();
+        } else {
+            // Regex-based strip as fallback
+            const titleMatch = pageRes.data.match(/<title[^>]*>([^<]+)<\/title>/i);
+            title = titleMatch ? titleMatch[1].trim() : url;
+            text = pageRes.data
+                .replace(/<script[\s\S]*?<\/script>/gi, '')
+                .replace(/<style[\s\S]*?<\/style>/gi, '')
+                .replace(/<[^>]+>/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        const wordCount = text.split(/\s+/).filter(w => w.length > 0).length;
+
+        return {
+            extractedText: text,
+            title: title,
+            sourceUrl: url,
+            wordCount: wordCount
+        };
+    } catch (error) {
+        console.error(`[Scrape] Failed to scrape URL: ${url}`, error.message);
+        throw new Error(`Failed to extract text from URL: ${error.message}`);
+    }
+}
+
 module.exports = {
     processAndStoreDocument,
     searchContext,
-    searchWeb
+    searchWeb,
+    extractText,
+    scrapeUrlForImport
 };

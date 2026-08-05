@@ -23,9 +23,12 @@ export default function Workspace({ slides, setSlides, title, theme, setTheme, o
     return acc;
   }, {});
 
-  const activeThemeObj = theme === 'Custom' 
-    ? { bkgd: '#' + customThemeSettings.bkgd, textColor: '#' + customThemeSettings.textColor, accent: '#' + customThemeSettings.accent, titleColor: '#' + customThemeSettings.textColor, fontFace: customThemeSettings.fontFace, cssHeaderFont: customThemeSettings.fontFace, cssBodyFont: customThemeSettings.fontFace }
-    : (themes[theme] || themes['Modern Clean']);
+  // If theme is an object (dynamic), we map its properties to the expected format for the outer wrapper.
+  const activeThemeObj = typeof theme === 'object' 
+    ? { bkgd: '#' + theme.bg, textColor: '#' + theme.textPrimary, accent: '#' + theme.accent, titleColor: '#' + theme.accent, fontFace: theme.fontFace, cssHeaderFont: theme.fontFace, cssBodyFont: theme.bodyFontFace, shapeFill: '#' + theme.cardBg }
+    : (theme === 'Custom' 
+      ? { bkgd: '#' + customThemeSettings.bkgd, textColor: '#' + customThemeSettings.textColor, accent: '#' + customThemeSettings.accent, titleColor: '#' + customThemeSettings.textColor, fontFace: customThemeSettings.fontFace, cssHeaderFont: customThemeSettings.fontFace, cssBodyFont: customThemeSettings.fontFace, shapeFill: '#' + customThemeSettings.bkgd }
+      : (themes[theme] || themes['Modern Clean']));
 
 
   const handleReorder = (newOrder) => {
@@ -148,7 +151,7 @@ export default function Workspace({ slides, setSlides, title, theme, setTheme, o
                 )}
                 <div className="absolute top-0 left-0 w-full h-1 z-10" style={{ backgroundColor: activeThemeObj.accent }}></div>
                 <div className="relative z-10 w-full h-full">
-                  <SlideRenderer slide={slide} slideSize={slideSize} customBackground={customBackground} />
+                  <SlideRenderer slide={slide} slideSize={slideSize} customBackground={customBackground} theme={typeof theme === 'object' ? theme : null} />
                 </div>
               </div>
             </motion.div>

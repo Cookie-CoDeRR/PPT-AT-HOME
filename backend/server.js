@@ -53,6 +53,30 @@ app.post('/api/models', async (req, res) => {
     }
 });
 
+// Background Endpoints
+const backgroundService = require('./services/backgroundService');
+
+app.get('/api/backgrounds/presets', (req, res) => {
+    try {
+        const presets = backgroundService.getPresets();
+        res.json({ presets });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/backgrounds/generate', async (req, res) => {
+    try {
+        const { prompt } = req.body;
+        if (!prompt) return res.status(400).json({ error: "Prompt is required." });
+        
+        const result = await backgroundService.generateCustomBackground(prompt);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // History Endpoints
 app.get('/api/history', (req, res) => {
     try {
@@ -76,6 +100,25 @@ app.delete('/api/history/:id', (req, res) => {
     try {
         db.deletePresentation(req.params.id);
         res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.put('/api/history/:id', (req, res) => {
+    try {
+        const { title } = req.body;
+        db.renamePresentation(req.params.id, title);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/history/:id/duplicate', (req, res) => {
+    try {
+        const newItem = db.duplicatePresentation(req.params.id);
+        res.json(newItem);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -137,13 +180,108 @@ app.post('/api/upload-context', upload.single('file'), async (req, res) => {
     }
 });
 
+// New Template Picker Endpoint
+app.get('/api/templates', (req, res) => {
+    res.json([
+        {
+            "id": "t1",
+            "name": "Best Practices Guide",
+            "category": "Company",
+            "tab": "templates",
+            "thumbnailUrl": "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=300",
+            "dark": true
+        },
+        {
+            "id": "w1",
+            "name": "Sales Incentive Kickoff",
+            "category": "Sales",
+            "tab": "workspace",
+            "thumbnailUrl": "https://images.unsplash.com/photo-1497215728101-856f4ea42174?w=300",
+            "dark": true
+        }
+    ]);
+});
+
+// New Import Endpoints
+app.post('/api/import/file', upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+        const { extractText } = require('./services/ragService');
+        const text = await extractText(req.file.mimetype, req.file.buffer, req.file.originalname);
+        const wordCount = text.split(/\s+/).filter(w => w.length > 0).length;
+        res.json({
+            extractedText: text,
+            fileName: req.file.originalname,
+            fileType: req.file.originalname.split('.').pop(),
+            wordCount
+        });
+    } catch (error) {
+        console.error("Import file error:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/import/url', async (req, res) => {
+    try {
+        const { url } = req.body;
+        if (!url) return res.status(400).json({ error: "No url provided" });
+        const { scrapeUrlForImport } = require('./services/ragService');
+        const result = await scrapeUrlForImport(url);
+        res.json(result);
+    } catch (error) {
+        console.error("Import url error:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/import/drive', (req, res) => {
+    res.status(501).json({ error: "Not Implemented - Requires OAuth setup" });
+});
+
+// New Media Library Endpoints
+app.get('/api/media', (req, res) => {
+    try {
+        res.json(db.getMediaItems());
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/media/image', async (req, res) => {
+    try {
+        const { prompt } = req.body;
+        const mockUrl = `https://pollinations.ai/p/${encodeURIComponent(prompt)}?width=1024&height=1024`;
+        const media = db.saveMedia(mockUrl, 'image', prompt);
+        res.json(media);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/media/graphic', async (req, res) => {
+    try {
+        const { prompt } = req.body;
+        const mockUrl = `https://pollinations.ai/p/${encodeURIComponent(prompt + " flat vector graphic illustration")}?width=1024&height=1024`;
+        const media = db.saveMedia(mockUrl, 'graphic', prompt);
+        res.json(media);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Generate JSON Slides Endpoint
 app.post('/api/generate-json', async (req, res) => {
     try {
-        const { prompt, slideCount, tone, baseUrl, model, useRag, useWebRag, theme, density, includeImages, referenceImage, temperature, contentType, language, slideSize, graphicStyle, graphicCount, graphicQuality } = req.body;
+        const { prompt, slideCount, tone, baseUrl, model, useRag, useWebRag, theme, density, includeImages, referenceImage, temperature, contentType, language, slideSize, graphicStyle, graphicCount, graphicQuality, pasteMode, importType, importUrl } = req.body;
         
         if (!prompt || !tone) {
             return res.status(400).json({ error: "Missing required parameters" });
+        }
+
+        if (contentType === 'graphic') {
+             const mockUrl = `https://pollinations.ai/p/${encodeURIComponent(prompt)}?width=1024&height=1024`;
+             const media = db.saveMedia(mockUrl, 'graphic', prompt);
+             return res.json({ id: media.id, type: 'graphic', url: mockUrl });
         }
 
         // Run document RAG and web RAG concurrently (Web RAG is default now)
@@ -172,17 +310,22 @@ app.post('/api/generate-json', async (req, res) => {
             baseUrl,
             model,
             temperature || 0.6,
-            contextText
+            contextText,
+            { contentType, pasteMode }
         );
-        const slidesJson = { title: prompt, slides: slidesArray };
+        const { generateDynamicTheme } = require('./services/themeService');
+        const dynamicTheme = await generateDynamicTheme(prompt, baseUrl, model);
+
+        const slidesJson = { title: prompt, slides: slidesArray, theme: dynamicTheme };
         
-        const presTheme = theme || "Modern Minimalist";
+        const presTheme = dynamicTheme.name || "Dynamic Theme";
         const dbId = db.savePresentation(slidesJson.title || "Untitled Presentation", slidesJson, presTheme);
 
         res.json({ 
             id: dbId, 
             slides: slidesJson.slides, 
-            title: slidesJson.title 
+            title: slidesJson.title,
+            theme: dynamicTheme
         });
     } catch (error) {
         console.error("Error generating JSON:", error);
