@@ -8,6 +8,7 @@ import {
   Sparkles, Presentation, SortDesc, Scissors
 } from 'lucide-react';
 import MediaLibrary from './MediaLibrary';
+import SearchModal from './SearchModal';
 
 // ─── Sidebar nav items ──────────────────────────────────────────────────────
 const SIDE_NAV = [
@@ -104,6 +105,19 @@ export default function HomePage({ onCreateNew, onSelectMode, onShowHistory, dar
   const [docs,         setDocs]         = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [importOpen,   setImportOpen]   = useState(false);
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
+
+  // Global hotkey for Cmd+K to open Search Modal
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setSearchModalOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Fetch history from existing backend endpoint
   useEffect(() => {
@@ -174,14 +188,18 @@ export default function HomePage({ onCreateNew, onSelectMode, onShowHistory, dar
             <div className={`px-2 py-2 space-y-0.5 border-b ${divider}`}>
               <p className={`text-[10px] font-bold uppercase tracking-widest px-2 mb-1 ${mutedTxt}`}>Gammas</p>
               {[
-                { icon: Search,  label: 'Search ⌘K' },
+                { icon: Search,  label: 'Search ⌘K', onClick: () => setSearchModalOpen(true) },
                 { icon: Users,   label: 'Shared with you' },
                 { icon: Globe,   label: 'Sites' },
                 { icon: Code2,   label: 'API Generated' },
               ].map(item => {
                 const Icon = item.icon;
                 return (
-                  <button key={item.label} className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors ${sideLink}`}>
+                  <button 
+                    key={item.label} 
+                    onClick={item.onClick}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors ${sideLink}`}
+                  >
                     <Icon className="w-3.5 h-3.5" />
                     {item.label}
                   </button>
@@ -385,6 +403,13 @@ export default function HomePage({ onCreateNew, onSelectMode, onShowHistory, dar
           </div>
         )}
       </div>
+
+      <SearchModal 
+        isOpen={searchModalOpen} 
+        onClose={() => setSearchModalOpen(false)} 
+        docs={docs} 
+        darkMode={darkMode} 
+      />
     </div>
   );
 }
