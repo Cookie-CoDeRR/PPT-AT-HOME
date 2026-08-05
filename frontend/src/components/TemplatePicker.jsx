@@ -115,7 +115,7 @@ export default function TemplatePicker({ onBack, onSelectTemplate }) {
   }, [allTemplates, activeCategory, search]);
 
   return (
-    <div className="w-full min-h-screen bg-gradient-to-b from-[#eef0fb] via-[#e4e7f8] to-[#d8dcf4] pb-20">
+    <div className="w-full min-h-full pb-20">
 
       {/* Top bar */}
       <div className="flex items-center justify-between px-8 py-4">

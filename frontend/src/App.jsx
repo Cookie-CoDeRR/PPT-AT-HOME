@@ -157,7 +157,11 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0B0F17] text-gray-100 selection:bg-violet-500/30">
+    <div className={`min-h-screen text-gray-100 selection:bg-violet-500/30 transition-colors duration-300 ${
+      view === 'template-pick'
+        ? 'bg-gradient-to-b from-[#eef0fb] via-[#e4e7f8] to-[#d8dcf4]'
+        : 'bg-[#0B0F17]'
+    }`}>
       {showHistory && <HistoryPanel onSelectHistory={handleSelectHistory} onClose={() => setShowHistory(false)} />}
       
       {showSettings && (
@@ -178,24 +182,28 @@ function App() {
       )}
 
       {/* Top Navigation */}
-      <header className="w-full flex items-center justify-between p-4 px-8 border-b border-white/5 bg-[#0B0F17]/80 backdrop-blur-md sticky top-0 z-50">
+      <header className={`w-full flex items-center justify-between p-4 px-8 border-b sticky top-0 z-50 backdrop-blur-md transition-colors duration-300 ${
+        view === 'template-pick'
+          ? 'border-black/5 bg-[#eef0fb]/90'
+          : 'border-white/5 bg-[#0B0F17]/80'
+      }`}>
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => { setSlidesJson(null); setDbId(null); setView('home'); }}>
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-500/20">
                <Presentation className="w-5 h-5 text-white" />
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-white">Gamma<span className="text-violet-400">Clone</span></h1>
+            <h1 className={`text-xl font-bold tracking-tight ${view === 'template-pick' ? 'text-gray-900' : 'text-white'}`}>Gamma<span className="text-violet-500">Clone</span></h1>
         </div>
         <div className="flex items-center gap-4">
             {view !== 'home' && (
-                <button onClick={() => { setSlidesJson(null); setDbId(null); setView('home'); }} className="text-sm font-medium text-gray-400 hover:text-white transition-colors">
+                <button onClick={() => { setSlidesJson(null); setDbId(null); setView('home'); }} className={`text-sm font-medium transition-colors ${view === 'template-pick' ? 'text-gray-500 hover:text-gray-900' : 'text-gray-400 hover:text-white'}`}>
                     Home
                 </button>
             )}
-            <button onClick={() => setShowHistory(true)} className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-sm font-medium transition-colors border border-white/5">
-                <History className="w-4 h-4 text-gray-400" /> History
+            <button onClick={() => setShowHistory(true)} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${view === 'template-pick' ? 'bg-black/5 hover:bg-black/10 border-black/10 text-gray-700' : 'bg-white/5 hover:bg-white/10 border-white/5 text-gray-300'}`}>
+                <History className="w-4 h-4" /> History
             </button>
-            <button onClick={() => setShowSettings(true)} className="flex items-center justify-center p-2 bg-white/5 hover:bg-white/10 rounded-lg transition-colors border border-white/5" title="Settings">
-                <Settings className="w-4 h-4 text-gray-400" />
+            <button onClick={() => setShowSettings(true)} className={`flex items-center justify-center p-2 rounded-lg transition-colors border ${view === 'template-pick' ? 'bg-black/5 hover:bg-black/10 border-black/10' : 'bg-white/5 hover:bg-white/10 border-white/5'}`} title="Settings">
+                <Settings className={`w-4 h-4 ${view === 'template-pick' ? 'text-gray-600' : 'text-gray-400'}`} />
             </button>
         </div>
       </header>
