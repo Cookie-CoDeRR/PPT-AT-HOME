@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import HomePage from './components/HomePage';
+import CreateNewPage from './components/CreateNewPage';
 import CreationLauncher from './components/CreationLauncher';
 import PasteTextLauncher from './components/PasteTextLauncher';
 import WizardForm from './components/WizardForm';
@@ -28,8 +29,8 @@ function App() {
       .catch(e => console.error("Discovery failed", e));
   }, []);
   
-  // Navigation: 'home' | 'create' | 'paste' | 'wizard' | 'template-pick' | 'import' | 'workspace'
-  const [view, setView] = useState('import');
+  // Navigation: 'home' | 'create-new' | 'create' | 'paste' | 'wizard' | 'template-pick' | 'import' | 'workspace'
+  const [view, setView] = useState('home');
 
   // Universal dark/light mode (persisted in localStorage)
   const [darkMode, setDarkMode] = useState(() => {
@@ -237,7 +238,7 @@ function App() {
         </div>
       </header>
 
-      <main className="w-full h-[calc(100vh-73px)] relative overflow-y-auto overflow-x-hidden flex flex-col items-center">
+      <main className="w-full h-[calc(100vh-73px)] relative flex flex-col overflow-hidden">
         
         {/* Error Toast */}
         {error && (
@@ -248,84 +249,104 @@ function App() {
 
         {view === 'home' && (
             <HomePage
+              darkMode={darkMode}
+              onCreateNew={() => setView('create-new')}
               onSelectMode={handleSelectMode}
               onShowHistory={() => setShowHistory(true)}
             />
         )}
 
-        {view === 'create' && (
-            <CreationLauncher 
-              onGenerate={handleGenerateJson} 
-              isGenerating={isGenerating} 
-              baseUrl={settings.baseUrl}
+        {view === 'create-new' && (
+            <CreateNewPage
+              onSelectMode={handleSelectMode}
+              onShowHistory={() => setShowHistory(true)}
               onBack={() => setView('home')}
             />
         )}
 
-        {view === 'paste' && (
-            <PasteTextLauncher
-              onGenerate={handleGenerateJson}
-              isGenerating={isGenerating}
-              onBack={() => setView('home')}
-            />
+        {view === 'create-new' && (
+            <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col items-center">
+              <CreateNewPage
+                onSelectMode={handleSelectMode}
+                onShowHistory={() => setShowHistory(true)}
+                onBack={() => setView('home')}
+              />
+            </div>
         )}
 
-        {view === 'template-pick' && (
-            <TemplatePicker
-              onBack={() => setView('home')}
-              darkMode={darkMode}
-              onSelectTemplate={(template) => {
-                handleGenerateJson({
-                  prompt: `Create a ${template.name} presentation`,
-                  contentType: 'presentation',
-                  slideCount: 10,
-                  tone: 'Professional/Corporate',
-                  theme: 'Modern Minimalist',
-                  templateType: 'default',
-                  density: 'Detailed',
-                  includeImages: true,
-                  templateId: template.id,
-                  templateName: template.name,
-                });
-              }}
-            />
-        )}
-
-        {view === 'import' && (
-            <ImportLauncher
-              darkMode={darkMode}
-              onBack={() => setView('home')}
-              onPasteInText={() => setView('paste')}
-              onImport={(importData) => {
-                handleGenerateJson({
-                  prompt: importData.url
-                    ? `Transform the content at ${importData.url} into a presentation`
-                    : 'Transform the uploaded file into a presentation',
-                  contentType: 'presentation',
-                  importType: importData.importType,    // 'file' | 'drive' | 'url'
-                  importUrl: importData.url || null,
-                  importFile: importData.file || null,
-                  slideCount: 10,
-                  tone: 'Professional/Corporate',
-                  theme: 'Modern Minimalist',
-                  templateType: 'default',
-                  density: 'Detailed',
-                  includeImages: true,
-                });
-              }}
-            />
-        )}
-
-        {view === 'wizard' && (
-            <WizardForm
-              onGenerate={handleGenerateJson}
-              isGenerating={isGenerating}
-              baseUrl={settings.baseUrl}
-            />
+        {['create','paste','template-pick','import','wizard'].includes(view) && (
+            <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col items-center">
+              {view === 'create' && (
+                  <CreationLauncher
+                    onGenerate={handleGenerateJson}
+                    isGenerating={isGenerating}
+                    baseUrl={settings.baseUrl}
+                    onBack={() => setView('home')}
+                  />
+              )}
+              {view === 'paste' && (
+                  <PasteTextLauncher
+                    onGenerate={handleGenerateJson}
+                    isGenerating={isGenerating}
+                    onBack={() => setView('home')}
+                  />
+              )}
+              {view === 'template-pick' && (
+                  <TemplatePicker
+                    onBack={() => setView('home')}
+                    darkMode={darkMode}
+                    onSelectTemplate={(template) => {
+                      handleGenerateJson({
+                        prompt: `Create a ${template.name} presentation`,
+                        contentType: 'presentation',
+                        slideCount: 10,
+                        tone: 'Professional/Corporate',
+                        theme: 'Modern Minimalist',
+                        templateType: 'default',
+                        density: 'Detailed',
+                        includeImages: true,
+                        templateId: template.id,
+                        templateName: template.name,
+                      });
+                    }}
+                  />
+              )}
+              {view === 'import' && (
+                  <ImportLauncher
+                    darkMode={darkMode}
+                    onBack={() => setView('home')}
+                    onPasteInText={() => setView('paste')}
+                    onImport={(importData) => {
+                      handleGenerateJson({
+                        prompt: importData.url
+                          ? `Transform the content at ${importData.url} into a presentation`
+                          : 'Transform the uploaded file into a presentation',
+                        contentType: 'presentation',
+                        importType: importData.importType,
+                        importUrl: importData.url || null,
+                        importFile: importData.file || null,
+                        slideCount: 10,
+                        tone: 'Professional/Corporate',
+                        theme: 'Modern Minimalist',
+                        templateType: 'default',
+                        density: 'Detailed',
+                        includeImages: true,
+                      });
+                    }}
+                  />
+              )}
+              {view === 'wizard' && (
+                  <WizardForm
+                    onGenerate={handleGenerateJson}
+                    isGenerating={isGenerating}
+                    baseUrl={settings.baseUrl}
+                  />
+              )}
+            </div>
         )}
 
         {view === 'workspace' && slidesJson && (
-            <Workspace 
+            <Workspace
               slides={slidesJson}
               setSlides={setSlidesJson}
               title={title}
