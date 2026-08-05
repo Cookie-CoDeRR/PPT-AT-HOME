@@ -99,6 +99,85 @@ const PRESENTATION_SCHEMA = {
     }
 };
 
+// SCHEMA 3: Single slide generation
+const SINGLE_SLIDE_SCHEMA = {
+    type: "json_schema",
+    json_schema: {
+        name: "single_slide_content",
+        strict: true,
+        schema: {
+            type: "object",
+            properties: {
+                slide_type: { type: "string" },
+                role: { type: "string" },
+                priority: { type: "integer" },
+                key_message: { type: "string" },
+                title: { type: "string" },
+                subtitle: { type: "string" },
+                left_content: { type: "string" },
+                image_description: { type: "string" },
+                paragraphs: { 
+                    type: "array", 
+                    items: { type: "string" } 
+                },
+                cards: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            header: { type: "string" },
+                            description: { type: "string" }
+                        },
+                        required: ["header", "description"],
+                        additionalProperties: false
+                    }
+                },
+                left_box: {
+                    type: "object",
+                    properties: {
+                        header: { type: "string" },
+                        points: { type: "array", items: { type: "string" } }
+                    },
+                    required: ["header", "points"],
+                    additionalProperties: false
+                },
+                right_box: {
+                    type: "object",
+                    properties: {
+                        header: { type: "string" },
+                        points: { type: "array", items: { type: "string" } }
+                    },
+                    required: ["header", "points"],
+                    additionalProperties: false
+                },
+                table_data: {
+                    type: "object",
+                    properties: {
+                        headers: { type: "array", items: { type: "string" } },
+                        rows: { 
+                            type: "array", 
+                            items: { type: "array", items: { type: "string" } } 
+                        }
+                    },
+                    required: ["headers", "rows"],
+                    additionalProperties: false
+                },
+                chart_data: {
+                    type: "object",
+                    properties: {
+                        labels: { type: "array", items: { type: "string" } },
+                        values: { type: "array", items: { type: "number" } }
+                    },
+                    required: ["labels", "values"],
+                    additionalProperties: false
+                }
+            },
+            required: ["slide_type", "role", "priority", "key_message", "title"],
+            additionalProperties: false
+        }
+    }
+};
+
 // Internal helper for robustly parsing diverse API output formats
 function parseApiResponse(responseData) {
     let rawOutput;
@@ -198,21 +277,36 @@ ${JSON.stringify(slideTypeBlueprint)}
     return metadataSlides;
 }
 
-// PASS 2: Write the content given the plan
-async function writeSlideContent(userPrompt, metadataSlides, baseUrl, modelName, temperature, contextText) {
-    let finalPrompt = `Write the presentation content.`;
-    if (contextText && contextText.trim() !== "") {
-        finalPrompt += `\n\nContext Information (Use this to ground the presentation):\n${contextText}`;
-    }
+// PASS 2: Write the content given the plan (SLIDE-BY-SLIDE ITERATION)
+async function writeSlideContent(userPrompt, blueprint, baseUrl, modelName, temperature, contextText) {
+    console.log(`[Content Writer] Beginning iterative generation for ${blueprint.length} slides...`);
+    const finalSlides = [];
 
-    const systemPrompt = `You are an expert technical presentation writer.
+    for (let idx = 0; idx < blueprint.length; idx++) {
+        const plan = blueprint[idx];
+        console.log(`[Content Writer] ✍️ Generating slide ${idx + 1}/${blueprint.length} [${plan.slide_type}] using CONTENT MODEL: "${modelName}"...`);
+
+        let finalPrompt = `Write the presentation content for SLIDE ${idx + 1}.`;
+        if (contextText && contextText.trim() !== "") {
+            finalPrompt += `\n\nContext Information (Use this to ground the presentation):\n${contextText}`;
+        }
+        
+        // Provide prior slides as context so it doesn't repeat itself
+        if (finalSlides.length > 0) {
+            const priorTitles = finalSlides.map(s => s.title).join(" | ");
+            finalPrompt += `\n\nPrior Slide Titles Generated So Far: ${priorTitles}`;
+        }
+
+        const systemPrompt = `You are an expert technical presentation writer.
 Generate presentation content for the topic: "${userPrompt}".
+You are writing ONE specific slide (Slide ${idx + 1} out of ${blueprint.length}).
 
 STRICT INSTRUCTIONS:
-I am providing a planned metadata array below. For each slide, you MUST keep its slide_type, role, priority, and key_message EXACTLY as given — do not change them. Add only the content fields for that slide_type.
+You MUST create content that fits the layout: ${plan.slide_type}.
+Please assign an appropriate role (e.g. hook, context, core_idea, evidence, summary), priority (1, 2, or 3), and key_message for this slide based on where it sits in the presentation.
 
-PLANNED METADATA:
-${JSON.stringify(metadataSlides, null, 2)}
+CURRENT SLIDE LAYOUT REQUIREMENT:
+${JSON.stringify(plan, null, 2)}
 
 ROLE WRITING GUIDE:
 - hook: Punchy, provocative framing. 1 bold claim or stat. No hedging.
@@ -236,46 +330,39 @@ SLIDE TYPE INSTRUCTIONS:
 - For 'comparison' slides: fill 'title', 'left_box', and 'right_box'.
 - For 'standard_text' slides: fill 'title' and 'paragraphs'.`;
 
-    const response = await axios.post(
-        baseUrl,
-        {
-            model: modelName,
-            messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: finalPrompt }
-            ],
-            temperature: temperature,
-            max_tokens: 6144,
-            stream: false,
-            response_format: PRESENTATION_SCHEMA
+        const response = await axios.post(
+            baseUrl,
+            {
+                model: modelName,
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: finalPrompt }
+                ],
+                temperature: temperature,
+                max_tokens: 1024,
+                stream: false,
+                response_format: SINGLE_SLIDE_SCHEMA
+            }
+        );
+
+        let rawOutput;
+        if (response.data.choices && response.data.choices[0]?.message) {
+            rawOutput = response.data.choices[0].message.content;
+        } else {
+            rawOutput = JSON.stringify(response.data);
         }
-    );
 
-    const finalSlides = parseApiResponse(response.data);
+        const objectMatch = rawOutput.match(/\{[\s\S]*\}/);
+        if (!objectMatch) throw new Error("No JSON object found in output");
+        
+        let slide = JSON.parse(objectMatch[0]);
 
-    // Validate
-    if (finalSlides.length !== metadataSlides.length) {
-        throw new Error(`Writer returned ${finalSlides.length} slides, expected ${metadataSlides.length}`);
+        // Enforce the layout type
+        slide.slide_type = plan.slide_type;
+        finalSlides.push(slide);
     }
 
-    finalSlides.forEach((slide, idx) => {
-        const plan = metadataSlides[idx];
-        if (slide.slide_type !== plan.slide_type) {
-            console.warn(`[Content Writer Warning] LLM altered slide_type on slide ${idx} from ${plan.slide_type} to ${slide.slide_type}. Accepting change.`);
-        }
-        
-        // Quietly restore metadata if the LLM hallucinated changes
-        let metadataAltered = false;
-        if (slide.role !== plan.role) { slide.role = plan.role; metadataAltered = true; }
-        if (slide.priority !== plan.priority) { slide.priority = plan.priority; metadataAltered = true; }
-        if (slide.key_message !== plan.key_message) { slide.key_message = plan.key_message; metadataAltered = true; }
-        
-        if (metadataAltered) {
-            console.warn(`[Content Writer Warning] LLM altered metadata on slide ${idx}. Quietly restored to planned values.`);
-        }
-    });
-
-    console.log(`[Content Writer] Successfully wrote ${finalSlides.length} slides.`);
+    console.log(`[Content Writer] Successfully wrote ${finalSlides.length} slides iteratively.`);
     return finalSlides;
 }
 
@@ -288,10 +375,9 @@ async function generateSlideContent(userPrompt, blueprint, baseUrl = null, model
             : finalBaseUrl;
         const finalModelName = modelName || process.env.CONTENT_MODEL_NAME || 'gemma-4-e4b';
 
-        console.log(`[Content Pipeline] Starting 2-pass generation with ${finalModelName} at ${formattedBaseUrl}...`);
+        console.log(`[Content Pipeline] Starting 1-pass iterative generation with ${finalModelName} at ${formattedBaseUrl}...`);
 
-        const plannedSlides = await planSlideMetadata(userPrompt, blueprint, formattedBaseUrl, finalModelName, temperature, contextText);
-        const finalSlides = await writeSlideContent(userPrompt, plannedSlides, formattedBaseUrl, finalModelName, temperature, contextText);
+        const finalSlides = await writeSlideContent(userPrompt, blueprint, formattedBaseUrl, finalModelName, temperature, contextText);
 
         return finalSlides;
     } catch (error) {

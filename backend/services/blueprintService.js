@@ -61,22 +61,37 @@ async function getDetailedBlueprint(userPrompt, slideCount = 10) {
     if (!url.includes('/chat/completions')) {
         url = url.replace(/\/$/, '') + '/chat/completions';
     }
-    const modelName = process.env.ROUTER_MODEL_NAME || 'gemma-4-e4b';
+    // We default to our new local fine-tuned model if not set
+    const modelName = process.env.ROUTER_MODEL_NAME || 'qwen_layout_mlx';
     
     const fallbackSequence = Array(slideCount).fill({ slide_type: "standard_text" });
     fallbackSequence[0] = { slide_type: "title_hero" };
 
     try {
-        const response = await axios.post(url, {
-            model: modelName,
-            messages: [
+        let messages = [];
+        
+        console.log(`\n[Blueprint Router] 🧠 Querying LAYOUT MODEL: "${modelName}" at ${url}...`);
+
+        // If it's our fine-tuned layout model, we use the exact Alpaca format it was trained on
+        if (modelName.includes('qwen') || modelName.includes('layout')) {
+            const alpacaPrompt = `Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\nYou are a presentation layout planner. Given a slide count, generate a realistic layout sequence for a professional presentation.\n\n### Input:\nSlide count: ${slideCount}\n\n### Response:\n`;
+            messages = [
+                { role: "user", content: alpacaPrompt }
+            ];
+        } else {
+            // Fallback for general models like Gemma
+            messages = [
                 { role: "system", content: qwenSystemPrompt },
                 { role: "user", content: `Design a structurally varied blueprint for a ${slideCount}-slide presentation about: "${userPrompt}".` }
-            ],
-            temperature: 0.7, // Higher temp encourages variety
-            max_tokens: 2000,
-            stream: false,
-            response_format: BLUEPRINT_SCHEMA
+            ];
+        }
+
+        const response = await axios.post(url, {
+            model: modelName,
+            messages: messages,
+            temperature: 0.3, // Lower temp for 1.5B models to prevent infinite rambling
+            max_tokens: 500,
+            stream: false
         });
 
         let rawOutput;
@@ -88,11 +103,58 @@ async function getDetailedBlueprint(userPrompt, slideCount = 10) {
 
         console.log("[Blueprint Router] Raw output:\n", rawOutput);
 
-        const objectMatch = rawOutput.match(/\{[\s\S]*\}/);
-        if (!objectMatch) throw new Error("No JSON object found");
+        // Look for either a JSON object { ... } or a JSON array [ ... ]
+        const objectMatch = rawOutput.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+        
+        let parsed;
+        if (!objectMatch) {
+            console.log("[Blueprint Router] No JSON found. Attempting to parse markdown...");
+            
+            // Try to match "1. **Layout Name**" or "**Slide Type:** Layout Name"
+            const fallbackRegex1 = /\*\*Slide Type:\*\*\s*([^\n]+)/gi;
+            const fallbackRegex2 = /\d+\.\s*\*\*([^\*]+)\*\*/g;
+            
+            let slideTypesMatch = rawOutput.match(fallbackRegex1);
+            if (slideTypesMatch && slideTypesMatch.length > 0) {
+                const types = slideTypesMatch.map(s => s.replace(/\*\*Slide Type:\*\*\s*/i, '').trim().toLowerCase().replace(/ /g, '_'));
+                const blueprint = types.map(type => ({ slide_type: type }));
+                console.log(`[Blueprint Success] Extracted ${blueprint.length} slides from markdown (Format 1).`);
+                return blueprint;
+            }
 
-        const parsed = JSON.parse(objectMatch[0]);
-        const blueprint = parsed.slides || parsed;
+            slideTypesMatch = rawOutput.match(fallbackRegex2);
+            if (slideTypesMatch && slideTypesMatch.length > 0) {
+                const types = slideTypesMatch.map(s => s.replace(/\d+\.\s*\*\*/, '').replace(/\*\*/, '').trim().toLowerCase().replace(/ /g, '_').replace(/:/g, ''));
+                const blueprint = types.map(type => ({ slide_type: type }));
+                console.log(`[Blueprint Success] Extracted ${blueprint.length} slides from markdown (Format 2).`);
+                return blueprint;
+            }
+            
+            // Format 3: Raw Space-Separated Layouts (Qwen 1.5B sometimes loses JSON brackets)
+            const validLayouts = ["title_hero", "standard_text", "bento_grid", "two_column_image", "comparison", "stat_or_quote", "data_table", "chart_pie", "chart_bar", "title_split"];
+            const rawWords = rawOutput.toLowerCase().split(/[\s,]+/);
+            let extracted = rawWords.filter(word => validLayouts.includes(word));
+            
+            if (extracted.length > 0) {
+                // Limit to the requested slide count
+                if (extracted.length > slideCount) {
+                    extracted = extracted.slice(0, slideCount);
+                }
+                const blueprint = extracted.map(type => ({ slide_type: type }));
+                console.log(`[Blueprint Success] Extracted ${blueprint.length} slides from raw string parsing (Format 3).`);
+                return blueprint;
+            }
+
+            throw new Error("No JSON object or array found, and markdown/string parsing failed.");
+        }
+
+        parsed = JSON.parse(objectMatch[0]);
+        let blueprint = parsed.slides || parsed;
+
+        // If the model output a raw array of strings (like our fine-tuned Qwen does), map it to objects
+        if (Array.isArray(blueprint) && blueprint.length > 0 && typeof blueprint[0] === 'string') {
+            blueprint = blueprint.map(type => ({ slide_type: type }));
+        }
 
         if (Array.isArray(blueprint) && blueprint.length > 0) {
             console.log(`[Blueprint Success] Predicted ${blueprint.length} detailed slide blueprint.`);

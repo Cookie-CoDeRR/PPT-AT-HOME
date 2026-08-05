@@ -7,10 +7,22 @@
  * @returns {Object} DSL tree root node for pptxExporter.renderPptxDSL()
  */
 const PRIORITY_STYLE = {
-  1: { titleSize: 30, accentColor: '2B6CB0', titleWeight: true,  emphasisBar: true  },
-  2: { titleSize: 26, accentColor: '4A5568', titleWeight: true,  emphasisBar: false },
-  3: { titleSize: 22, accentColor: '718096', titleWeight: false, emphasisBar: false }
+  1: { titleSize: 24, accentColor: '2B6CB0', titleWeight: true,  emphasisBar: true  },
+  2: { titleSize: 20, accentColor: '4A5568', titleWeight: true,  emphasisBar: false },
+  3: { titleSize: 18, accentColor: '718096', titleWeight: false, emphasisBar: false }
 };
+
+// Small text-scaling engine to prevent overflows
+function getAutoFontSize(text, defaultSize, maxChars) {
+    if (!text) return defaultSize;
+    const str = String(text);
+    if (str.length <= maxChars) return defaultSize;
+    
+    // Scale down proportionally, but cap at 60% of original size to remain legible
+    const ratio = maxChars / str.length;
+    const scaledSize = Math.floor(defaultSize * ratio);
+    return Math.max(scaledSize, Math.floor(defaultSize * 0.6));
+}
 
 function parseSlideToDSL(slide) {
     const layoutTag = slide.slide_type;
@@ -26,8 +38,8 @@ function parseSlideToDSL(slide) {
     let titleH = 12;
     let contentOffsetY = 0;
     
-    // SHARED TITLE BLOCK (Non-hero, non-stat)
-    if (layoutTag !== "title_hero" && layoutTag !== "stat_or_quote") {
+    // SHARED TITLE BLOCK (Non-hero, non-stat, non-title-split)
+    if (layoutTag !== "title_hero" && layoutTag !== "stat_or_quote" && layoutTag !== "title_split") {
         if (slide.title && slide.title.length > 50) {
             titleH += 5; // Approx 0.3" extra height for wrapped titles
             contentOffsetY = 5; 
@@ -52,17 +64,40 @@ function parseSlideToDSL(slide) {
             root.children.push({
                 type: "text_block",
                 text: slide.title || "Presentation Title",
-                style: { x: "8%", y: "28%", w: "84%", h: "22%", fontSize: 44, bold: true, color: "textPrimary", align: "center" }
+                style: { x: "8%", y: "20%", w: "84%", h: "40%", fontSize: 36, bold: true, color: "textPrimary", align: "center" }
             });
             const titleWraps = (slide.title && slide.title.length > 40);
-            const subtitleY = titleWraps ? "65%" : "54%"; // Add ~0.6" offset if title wraps
+            const subtitleY = titleWraps ? "72%" : "60%"; // Push subtitle down if title is long
             if (slide.subtitle) {
                 root.children.push({
                     type: "text_block",
                     text: slide.subtitle,
-                    style: { x: "12%", y: subtitleY, w: "76%", h: "14%", fontSize: 22, color: "textSecondary", align: "center" }
+                    style: { x: "12%", y: subtitleY, w: "76%", h: "18%", fontSize: 20, color: "textSecondary", align: "center" }
                 });
             }
+            break;
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // TITLE SPLIT — Hero text left, accent block right
+        // ─────────────────────────────────────────────────────────
+        case "title_split": {
+            root.children.push({
+                type: "text_block",
+                text: slide.title || "Presentation Title",
+                style: { x: "8%", y: "30%", w: "40%", h: "25%", fontSize: 36, bold: true, color: "textPrimary", align: "left" }
+            });
+            if (slide.subtitle) {
+                root.children.push({
+                    type: "text_block",
+                    text: slide.subtitle,
+                    style: { x: "8%", y: "55%", w: "40%", h: "20%", fontSize: 16, color: "textSecondary", align: "left" }
+                });
+            }
+            root.children.push({
+                type: "card_container",
+                style: { x: "53%", y: "15%", w: "39%", h: "70%", fill: "accent", radius: 0.05 }
+            });
             break;
         }
 
@@ -73,21 +108,22 @@ function parseSlideToDSL(slide) {
         case "standard_text": {
             // Support new `paragraphs` field or legacy `bullets` fallback
             const paragraphs = slide.paragraphs || slide.bullets || [];
-            paragraphs.forEach((para, idx) => {
+            if (paragraphs.length > 0) {
+                const fullText = paragraphs.map(p => typeof p === "string" ? p : String(p)).join("\n\n");
                 root.children.push({
                     type: "text_block",
-                    text: typeof para === "string" ? para : String(para),
+                    text: fullText,
                     style: {
                         x: "8%",
-                        y: `${26 + contentOffsetY + idx * 22}%`,
+                        y: `${26 + contentOffsetY}%`,
                         w: "84%",
-                        h: "20%",
-                        fontSize: 17,
+                        h: "65%",
+                        fontSize: getAutoFontSize(fullText, 17, 300), // Max ~300 chars before scaling down
                         color: "textSecondary",
                         align: "left"
                     }
                 });
-            });
+            }
             break;
         }
 
@@ -98,26 +134,26 @@ function parseSlideToDSL(slide) {
             // Support new `cards` field or legacy `items` fallback
             const cards = slide.cards || (slide.items || []).map(i => ({ header: i.title || i.item_title, description: i.desc || i.item_text }));
             const positions = [
-                { x: "8%",  y: `${22 + contentOffsetY}%` },
-                { x: "52%", y: `${22 + contentOffsetY}%` },
-                { x: "8%",  y: `${60 + contentOffsetY}%` },
-                { x: "52%", y: `${60 + contentOffsetY}%` }
+                { x: "8%",  y: `${25 + contentOffsetY}%` },
+                { x: "52%", y: `${25 + contentOffsetY}%` },
+                { x: "8%",  y: `${61 + contentOffsetY}%` },
+                { x: "52%", y: `${61 + contentOffsetY}%` }
             ];
             cards.slice(0, 4).forEach((card, idx) => {
                 const pos = positions[idx];
                 root.children.push({
                     type: "card_container",
-                    style: { x: pos.x, y: pos.y, w: "40%", h: `${33 - contentOffsetY/2}%`, fill: "bg", radius: 0.05, border: pStyle.accentColor, borderWidth: slide.priority === 1 ? 2 : 1 },
+                    style: { x: pos.x, y: pos.y, w: "40%", h: `${31 - contentOffsetY/3}%`, fill: "bg", radius: 0.05, border: pStyle.accentColor, borderWidth: slide.priority === 1 ? 2 : 1 },
                     children: [
                         {
                             type: "text_block",
                             text: card.header || card.title || "",
-                            style: { x: "5%", y: "8%", w: "90%", h: "28%", fontSize: 17, bold: true, color: "textPrimary", align: "left" }
+                            style: { x: "5%", y: "8%", w: "90%", h: "28%", fontSize: 14, bold: true, color: "textPrimary", align: "left" }
                         },
                         {
                             type: "text_block",
-                            text: card.description || card.desc || "",
-                            style: { x: "5%", y: "40%", w: "90%", h: "55%", fontSize: 13, color: "textSecondary", align: "left" }
+                            text: card.description || "",
+                            style: { x: "4%", y: "30%", w: "92%", h: "60%", fontSize: getAutoFontSize(card.description, 11, 80), color: "textSecondary", align: "left" }
                         }
                     ]
                 });
@@ -271,6 +307,12 @@ function parseSlideToDSL(slide) {
                     type: "text_block",
                     bullets: fallbackContent.map(b => (typeof b === "string" ? b : String(b))),
                     style: { x: "8%", y: `${26 + contentOffsetY}%`, w: "84%", h: `${64 - contentOffsetY}%`, fontSize: 16, color: "textSecondary", align: "left" }
+                });
+            } else if (slide.left_content) {
+                root.children.push({
+                    type: "text_block",
+                    text: slide.left_content,
+                    style: { x: "8%", y: `${26 + contentOffsetY}%`, w: "40%", h: "60%", fontSize: getAutoFontSize(slide.left_content, 16, 250), color: "textSecondary", align: "left" }
                 });
             } else if (slide.subtitle) {
                 root.children.push({

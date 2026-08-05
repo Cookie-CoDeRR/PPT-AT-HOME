@@ -236,8 +236,8 @@ app.post('/api/generate-presentation', async (req, res) => {
         const { logGeneration } = require('./services/logger');
         logGeneration(prompt, webContext, blueprintSequence);
 
-        const { generateSlides } = require('./services/llmService');
-        const rawLLMOutput = await generateSlides(prompt, blueprintSequence, baseUrl, model, temperature, webContext);
+        const { generateSlideContent } = require('./services/llmService');
+        const rawLLMOutput = await generateSlideContent(prompt, blueprintSequence, baseUrl, model, temperature, webContext);
         
         const { validateAndHeal } = require('./services/jsonHealer');
         const validatedSlidesJson = await validateAndHeal(rawLLMOutput, baseUrl, model);
