@@ -141,7 +141,7 @@ async function searchContext(query, baseUrl, k = 3) {
 // ─── Web RAG: Google-style pseudo-RAG ────────────────────────────────────────
 // Searches DuckDuckGo, scrapes the top result pages, and returns relevant
 // text snippets to inject into the LLM system prompt as grounding context.
-async function searchWeb(query, maxResults = 3, maxCharsTotal = 1500) {
+async function searchWeb(query, maxResults = 2, maxCharsTotal = 600) {
     try {
         console.log(`[WebRAG] Searching web for: "${query}"`);
 

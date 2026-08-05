@@ -25,3 +25,4 @@ dataset_layout_bank.json
 ppt_maker_docker_bundle.tar.gz
 package-lock.json
 backend/legacy_deprecated/
+dev_archive/

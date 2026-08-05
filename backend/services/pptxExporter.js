@@ -7,19 +7,47 @@ async function renderPptxDSL(slide, dslTree, theme, fetchImageBase64, pres) {
     // Helper to resolve theme color or fallback to raw
     const getColor = (colorStr) => {
         if (!colorStr) return undefined;
-        if (theme[colorStr]) return theme[colorStr];
-        return colorStr;
+        
+        // Map abstract tags from layoutInterpreter to actual theme keys
+        const colorMap = {
+            "textPrimary": theme.textColor,
+            "textSecondary": theme.textColor,
+            "bg": theme.bkgd,
+            "cardBg": theme.shapeFill,
+            "cardBorder": theme.accent
+        };
+
+        if (colorMap[colorStr]) return colorMap[colorStr].replace('#', '');
+        if (theme[colorStr]) return theme[colorStr].replace('#', '');
+        return colorStr.replace('#', '');
     };
 
-    const processNode = async (node) => {
+    const getNativeFont = (isHeader) => {
+        const cssFont = isHeader ? theme.cssHeaderFont : theme.cssBodyFont;
+        if (!cssFont) return 'Arial';
+        if (cssFont.includes('Inter') || cssFont.includes('Roboto')) return 'Arial';
+        if (cssFont.includes('Outfit') || cssFont.includes('Montserrat')) return 'Calibri';
+        if (cssFont.includes('Merriweather') || cssFont.includes('Playfair')) return 'Georgia';
+        return 'Arial';
+    };
+
+    const parsePct = (val) => parseFloat(String(val).replace('%', '')) || 0;
+
+    const processNode = async (node, parentBounds = { x: 0, y: 0, w: 100, h: 100 }) => {
         const { type, style = {}, children = [] } = node;
         const opts = { ...style };
         
-        // Translate percentage to pptx string
-        if (opts.x) opts.x = String(opts.x);
-        if (opts.y) opts.y = String(opts.y);
-        if (opts.w) opts.w = String(opts.w);
-        if (opts.h) opts.h = String(opts.h);
+        // Calculate absolute percentages based on parent bounds
+        const absX = parentBounds.x + (parsePct(opts.x) / 100) * parentBounds.w;
+        const absY = parentBounds.y + (parsePct(opts.y) / 100) * parentBounds.h;
+        const absW = (parsePct(opts.w) / 100) * parentBounds.w;
+        const absH = (parsePct(opts.h) / 100) * parentBounds.h;
+
+        // Translate to pptx string
+        opts.x = `${absX}%`;
+        opts.y = `${absY}%`;
+        opts.w = `${absW}%`;
+        opts.h = `${absH}%`;
 
         if (type === "card_container") {
             const shapeOpts = { x: opts.x, y: opts.y, w: opts.w, h: opts.h };
@@ -45,7 +73,7 @@ async function renderPptxDSL(slide, dslTree, theme, fetchImageBase64, pres) {
                 bold: opts.bold || false,
                 align: opts.align || "left",
                 valign: "top",
-                fontFace: opts.bold ? theme.fontFace : theme.bodyFontFace
+                fontFace: getNativeFont(opts.bold)
             };
 
             if (node.bullets) {
@@ -117,10 +145,11 @@ async function renderPptxDSL(slide, dslTree, theme, fetchImageBase64, pres) {
 
         // Recursively process children
         for (const child of children) {
-            await processNode(child);
+            await processNode(child, { x: absX, y: absY, w: absW, h: absH });
         }
     };
 
+    // Start processing from root
     await processNode(dslTree);
 }
 
@@ -131,7 +160,7 @@ async function generatePPTX(dslPresentation, theme, exportPath, fetchImageBase64
     // Set master slide background
     pres.defineSlideMaster({
         title: "MASTER_SLIDE",
-        background: { color: theme.bg || "0B0F19" }
+        background: { color: (theme.bkgd || "0B0F19").replace('#', '') }
     });
 
     for (const slideDSL of dslPresentation) {
@@ -152,7 +181,7 @@ async function generatePPTXBuffer(dslPresentation, theme, fetchImageBase64) {
     // Set master slide background
     pres.defineSlideMaster({
         title: "MASTER_SLIDE",
-        background: { color: theme.bg || "0B0F19" }
+        background: { color: (theme.bkgd || "0B0F19").replace('#', '') }
     });
 
     for (const slideDSL of dslPresentation) {
