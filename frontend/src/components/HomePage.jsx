@@ -1,202 +1,415 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import axios from 'axios';
 import {
-  Sparkles,
-  FileText,
-  LayoutTemplate,
-  Upload,
-  History,
-  Presentation,
-  ArrowRight,
-  Zap,
+  Home, Image, LayoutTemplate, BookOpen, Settings, MoreHorizontal,
+  Search, Users, Globe, Code2, Trash2, FolderPlus, Plus, Download,
+  ChevronDown, Grid3X3, List, Star, Clock, User, Edit3, MoreVertical,
+  Sparkles, Presentation, SortDesc, Scissors
 } from 'lucide-react';
+import MediaLibrary from './MediaLibrary';
+import SearchModal from './SearchModal';
 
-const CREATION_MODES = [
-  {
-    id: 'generate',
-    icon: Sparkles,
-    iconColor: 'text-violet-400',
-    iconBg: 'from-violet-600/20 to-fuchsia-600/20',
-    borderHover: 'hover:border-violet-500/50',
-    title: 'Generate',
-    description: 'Create from a one-line prompt in a few seconds',
-    badge: null,
-  },
-  {
-    id: 'paste',
-    icon: FileText,
-    iconColor: 'text-blue-400',
-    iconBg: 'from-blue-600/20 to-cyan-600/20',
-    borderHover: 'hover:border-blue-500/50',
-    title: 'Paste in text',
-    description: 'Create from notes, an outline, or existing content',
-    badge: 'LAST USED',
-  },
-  {
-    id: 'template',
-    icon: LayoutTemplate,
-    iconColor: 'text-emerald-400',
-    iconBg: 'from-emerald-600/20 to-teal-600/20',
-    borderHover: 'hover:border-emerald-500/50',
-    title: 'Create from template',
-    description: 'Create using the structure or layouts from a template',
-    badge: null,
-  },
-  {
-    id: 'import',
-    icon: Upload,
-    iconColor: 'text-orange-400',
-    iconBg: 'from-orange-600/20 to-amber-600/20',
-    borderHover: 'hover:border-orange-500/50',
-    title: 'Import file or URL',
-    description: 'Enhance existing docs, presentations, or webpages',
-    badge: null,
-  },
+// ─── Sidebar nav items ──────────────────────────────────────────────────────
+const SIDE_NAV = [
+  { icon: Home,           label: 'Home',      id: 'home'      },
+  { icon: Image,          label: 'Media',     id: 'media'     },
+  { icon: LayoutTemplate, label: 'Templates', id: 'templates' },
+  { icon: BookOpen,       label: 'Library',   id: 'library'   },
+  { icon: Settings,       label: 'Settings',  id: 'settings'  },
+  { icon: MoreHorizontal, label: 'More',      id: 'more'      },
 ];
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.07, delayChildren: 0.1 },
-  },
-};
+const FILTER_TABS = [
+  { id: 'all',      label: 'All',              icon: Grid3X3 },
+  { id: 'recent',   label: 'Recently viewed',  icon: Clock   },
+  { id: 'mine',     label: 'Created by you',   icon: User    },
+  { id: 'fav',      label: 'Favorites',        icon: Star    },
+];
 
-const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
-};
+// ─── Document Card ──────────────────────────────────────────────────────────
+function DocCard({ item, darkMode }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const date = item.created_at
+    ? new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : 'Unknown date';
 
-export default function HomePage({ onSelectMode, onShowHistory }) {
-  const [hoveredCard, setHoveredCard] = useState(null);
+  const cardBg  = darkMode ? 'bg-[#1A2235] border-white/10 hover:border-white/20' : 'bg-white border-gray-200 hover:border-gray-300';
+  const titleC  = darkMode ? 'text-gray-200' : 'text-gray-800';
+  const dateC   = darkMode ? 'text-gray-500' : 'text-gray-400';
+  const thumbBg = darkMode ? 'bg-[#131B2A]' : 'bg-gray-50';
+  const menuBg  = darkMode ? 'bg-[#1E2A3B] border-white/10' : 'bg-white border-gray-200';
+  const menuTxt = darkMode ? 'text-gray-300 hover:text-white hover:bg-white/5' : 'text-gray-700 hover:bg-gray-50';
 
   return (
-    <div className="flex flex-col items-center justify-start min-h-full w-full max-w-5xl mx-auto px-6 pt-16 pb-12">
-      {/* Hero heading */}
-      <motion.div
-        initial={{ opacity: 0, y: -16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="text-center mb-14"
-      >
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-400 text-xs font-semibold uppercase tracking-widest mb-5">
-          <Zap className="w-3 h-3" />
-          Local AI • No Cloud Required
+    <motion.div
+      whileHover={{ y: -2 }}
+      transition={{ duration: 0.15 }}
+      className={`relative rounded-xl border overflow-hidden cursor-pointer transition-all duration-200 group ${cardBg}`}
+    >
+      {/* Thumbnail */}
+      <div className={`aspect-[4/3] ${thumbBg} flex items-center justify-center relative overflow-hidden`}>
+        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500/30 to-fuchsia-500/30 flex items-center justify-center">
+          <Presentation className="w-7 h-7 text-violet-400/70" />
         </div>
-        <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight bg-gradient-to-br from-white via-gray-100 to-gray-400 bg-clip-text text-transparent leading-tight mb-4">
-          Create with AI
-        </h1>
-        <p className="text-gray-400 text-lg max-w-xl mx-auto">
-          Turn your ideas into stunning presentations powered entirely by your local LLM — fully private, zero internet required.
-        </p>
-      </motion.div>
+        {/* Hover star */}
+        <button className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded">
+          <Star className={`w-4 h-4 ${darkMode ? 'text-gray-500 hover:text-yellow-400' : 'text-gray-400 hover:text-yellow-500'}`} />
+        </button>
+      </div>
 
-      {/* Creation mode cards */}
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full mb-10"
-      >
-        {CREATION_MODES.map((mode) => {
-          const Icon = mode.icon;
-          return (
-            <motion.button
-              key={mode.id}
-              variants={itemVariants}
-              onHoverStart={() => setHoveredCard(mode.id)}
-              onHoverEnd={() => setHoveredCard(null)}
-              whileHover={{ y: -4, scale: 1.02 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => onSelectMode(mode.id)}
-              className={`relative flex flex-col items-start gap-3 p-5 rounded-2xl bg-white/5 border border-white/10 ${mode.borderHover} transition-all duration-200 text-left group cursor-pointer overflow-hidden`}
-            >
-              {/* Glow overlay on hover */}
-              <div
-                className={`absolute inset-0 bg-gradient-to-br ${mode.iconBg} opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl`}
-              />
+      {/* Card footer */}
+      <div className="px-3 py-2.5 flex items-center gap-2">
+        <div className="flex-1 min-w-0">
+          <p className={`text-sm font-semibold truncate ${titleC}`}>{item.title || 'Untitled'}</p>
+          <p className={`text-xs mt-0.5 ${dateC}`}>Edited {date}</p>
+        </div>
 
-              {/* Icon */}
-              <div className={`relative z-10 w-12 h-12 rounded-xl bg-gradient-to-br ${mode.iconBg} border border-white/10 flex items-center justify-center`}>
-                <Icon className={`w-5 h-5 ${mode.iconColor}`} />
-              </div>
-
-              {/* Text */}
-              <div className="relative z-10 flex-1">
-                <h3 className="font-bold text-white text-sm leading-snug mb-1">{mode.title}</h3>
-                <p className="text-xs text-gray-400 leading-relaxed">{mode.description}</p>
-              </div>
-
-              {/* Badge */}
-              {mode.badge && (
-                <div className="relative z-10 flex items-center gap-1 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                  <History className="w-3 h-3" />
-                  {mode.badge}
-                </div>
-              )}
-
-              {/* Arrow on hover */}
+        {/* More menu */}
+        <div className="relative">
+          <button
+            onClick={e => { e.stopPropagation(); setMenuOpen(o => !o); }}
+            className={`p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${darkMode ? 'hover:bg-white/10 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}
+          >
+            <MoreVertical className="w-4 h-4" />
+          </button>
+          <AnimatePresence>
+            {menuOpen && (
               <motion.div
-                initial={{ opacity: 0, x: -4 }}
-                animate={hoveredCard === mode.id ? { opacity: 1, x: 0 } : { opacity: 0, x: -4 }}
-                className={`absolute top-4 right-4 z-10 ${mode.iconColor}`}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className={`absolute bottom-8 right-0 z-30 rounded-xl border shadow-2xl py-1 min-w-[140px] text-sm ${menuBg}`}
               >
-                <ArrowRight className="w-4 h-4" />
+                {['Open', 'Rename', 'Duplicate', 'Delete'].map(opt => (
+                  <button key={opt} onClick={() => setMenuOpen(false)}
+                    className={`w-full text-left px-3 py-1.5 transition-colors ${menuTxt} ${opt === 'Delete' ? 'text-red-400' : ''}`}>
+                    {opt}
+                  </button>
+                ))}
               </motion.div>
-            </motion.button>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Main Component ──────────────────────────────────────────────────────────
+export default function HomePage({ onCreateNew, onSelectMode, onShowHistory, darkMode }) {
+  const [activeNav,    setActiveNav]    = useState('media');
+  const [activeFilter, setActiveFilter] = useState('all');
+  const [viewMode,     setViewMode]     = useState('grid');   // 'grid' | 'list'
+  const [searchQuery,  setSearchQuery]  = useState('');
+  const [docs,         setDocs]         = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [importOpen,   setImportOpen]   = useState(false);
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
+
+  // Global hotkey for Cmd+K to open Search Modal
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setSearchModalOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Fetch history from existing backend endpoint
+  useEffect(() => {
+    axios.get('http://localhost:3000/api/history')
+      .then(res => setDocs(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setDocs([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = docs.filter(d =>
+    !searchQuery || (d.title || '').toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // ── Theme tokens ──────────────────────────────────────────────────────────
+  const sidebarBg  = darkMode ? 'bg-[#0D1117] border-white/5'  : 'bg-gray-50 border-gray-200';
+  const panelBg    = darkMode ? 'bg-[#111827] border-white/5'  : 'bg-white border-gray-100';
+  const mainBg     = darkMode ? ''                             : '';
+  const headerTxt  = darkMode ? 'text-white'                  : 'text-gray-900';
+  const mutedTxt   = darkMode ? 'text-gray-400'               : 'text-gray-500';
+  const inputBg    = darkMode ? 'bg-white/5 border-white/10 text-gray-300 placeholder-gray-600' : 'bg-gray-100 border-gray-200 text-gray-700 placeholder-gray-400';
+  const navItemAct = darkMode ? 'bg-white/10 text-white'      : 'bg-gray-200 text-gray-900';
+  const navItemDef = darkMode ? 'text-gray-500 hover:text-gray-300 hover:bg-white/5' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100';
+  const tabAct     = darkMode ? 'bg-white/10 text-white'      : 'bg-blue-50 text-blue-700';
+  const tabDef     = darkMode ? 'text-gray-500 hover:text-gray-300' : 'text-gray-500 hover:text-gray-800';
+  const divider    = darkMode ? 'border-white/5'              : 'border-gray-100';
+  const sideLink   = darkMode ? 'text-gray-400 hover:text-gray-200 hover:bg-white/5' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100';
+
+  return (
+    <div className={`flex w-full h-full`}>
+
+      {/* ── Far-left icon sidebar ─────────────────────────────────────────── */}
+      <div className={`flex flex-col items-center py-3 gap-1 w-14 border-r flex-shrink-0 ${sidebarBg}`}>
+        {/* Logo */}
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-md mb-3">
+          <Sparkles className="w-4 h-4 text-white" />
+        </div>
+        {SIDE_NAV.map(item => {
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.id}
+              title={item.label}
+              onClick={() => setActiveNav(item.id)}
+              className={`flex flex-col items-center gap-0.5 w-10 py-2 rounded-lg text-[9px] font-medium transition-all ${activeNav === item.id ? navItemAct : navItemDef}`}
+            >
+              <Icon className="w-4 h-4" />
+              <span>{item.label}</span>
+            </button>
           );
         })}
-      </motion.div>
+      </div>
 
-      {/* Divider */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.5 }}
-        className="flex items-center gap-4 w-full mb-10"
-      >
-        <div className="flex-1 h-px bg-white/5" />
-        <span className="text-xs text-gray-500 whitespace-nowrap">Or try something new</span>
-        <div className="flex-1 h-px bg-white/5" />
-      </motion.div>
+      {/* ── Secondary sidebar ─────────────────────────────────────────────── */}
+      <div className={`flex flex-col w-52 flex-shrink-0 border-r ${panelBg}`}>
+        {/* Conditionally render secondary sidebar based on activeNav */}
+        {activeNav === 'home' && (
+          <>
+            {/* Workspace */}
+            <div className={`px-3 py-3 border-b ${divider}`}>
+              <button className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm font-semibold transition-colors ${sideLink}`}>
+                <div className="w-6 h-6 rounded bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-white text-[10px] font-bold">AW</div>
+                <span className={`flex-1 text-left text-xs truncate ${headerTxt}`}>My Workspace</span>
+                <ChevronDown className={`w-3 h-3 ${mutedTxt}`} />
+              </button>
+            </div>
 
-      {/* Recent presentations prompt */}
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.55, duration: 0.4 }}
-        className="w-full"
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest">Recent</h2>
-          <button
-            onClick={onShowHistory}
-            className="flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 transition-colors font-medium"
-          >
-            View all <ArrowRight className="w-3 h-3" />
-          </button>
-        </div>
+            {/* Nav links */}
+            <div className={`px-2 py-2 space-y-0.5 border-b ${divider}`}>
+              <p className={`text-[10px] font-bold uppercase tracking-widest px-2 mb-1 ${mutedTxt}`}>Gammas</p>
+              {[
+                { icon: Search,  label: 'Search ⌘K', onClick: () => setSearchModalOpen(true) },
+                { icon: Users,   label: 'Shared with you' },
+                { icon: Globe,   label: 'Sites' },
+                { icon: Code2,   label: 'API Generated' },
+              ].map(item => {
+                const Icon = item.icon;
+                return (
+                  <button 
+                    key={item.label} 
+                    onClick={item.onClick}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors ${sideLink}`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
 
-        <motion.button
-          whileHover={{ y: -2 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={onShowHistory}
-          className="w-full flex items-center gap-4 p-5 rounded-2xl bg-white/5 border border-white/10 hover:border-violet-500/30 hover:bg-white/8 text-left transition-all duration-200 group"
-        >
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600/30 to-fuchsia-600/30 border border-white/10 flex items-center justify-center flex-shrink-0">
-            <Presentation className="w-5 h-5 text-violet-400" />
+            {/* Folders */}
+            <div className="px-2 py-2 flex-1">
+              <p className={`text-[10px] font-bold uppercase tracking-widest px-2 mb-2 ${mutedTxt}`}>Folders</p>
+              <div className={`mx-2 p-3 rounded-xl ${darkMode ? 'bg-white/5' : 'bg-gray-50'}`}>
+                <p className={`text-xs ${mutedTxt} mb-1.5 leading-snug`}>Organize your gammas by topic and share them with your team</p>
+                <button className="text-xs text-blue-500 hover:text-blue-400 font-medium">Create or join a folder</button>
+              </div>
+            </div>
+
+            {/* Trash */}
+            <div className={`px-2 py-2 border-t ${divider}`}>
+              <button className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors ${sideLink}`}>
+                <Trash2 className="w-3.5 h-3.5" /> Trash
+              </button>
+            </div>
+          </>
+        )}
+
+        {activeNav === 'media' && (
+          <>
+            <div className={`px-4 py-4 border-b ${divider}`}>
+              <h2 className={`text-sm font-bold ${headerTxt}`}>Media Library</h2>
+            </div>
+            <div className="px-2 py-2 space-y-0.5 flex-1">
+              <button className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold ${darkMode ? 'bg-white/10 text-white' : 'bg-gray-200 text-gray-900'}`}>
+                <Image className="w-3.5 h-3.5" /> Media
+              </button>
+              <button className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors ${sideLink}`}>
+                <Scissors className="w-3.5 h-3.5" /> Graphics
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── Main content ──────────────────────────────────────────────────── */}
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+        
+        {activeNav === 'media' ? (
+          <MediaLibrary darkMode={darkMode} />
+        ) : (
+          <div className="flex flex-col h-full overflow-y-auto">
+            {/* Top bar */}
+            <div className={`flex items-center gap-3 px-6 py-3 border-b flex-shrink-0 ${darkMode ? 'border-white/5' : 'border-gray-100'}`}>
+              <div className="flex items-center gap-2 flex-1">
+                <Grid3X3 className={`w-4 h-4 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`} />
+                <span className={`font-bold text-base ${headerTxt}`}>Gammas</span>
+              </div>
+
+              {/* Search */}
+              <div className={`hidden md:flex items-center gap-2 rounded-lg px-3 py-1.5 border text-sm flex-1 max-w-xs ${inputBg}`}>
+                <Search className="w-4 h-4 flex-shrink-0 opacity-60" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search..."
+                  className="bg-transparent outline-none flex-1 text-sm"
+                />
+              </div>
+
+              {/* Right icons */}
+              <div className="flex items-center gap-2">
+                <button className={`p-1.5 rounded-lg transition-colors ${navItemDef}`} title="Notifications">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Action bar */}
+            <div className="flex items-center gap-2 px-6 py-4 flex-shrink-0">
+              {/* ⭐ CREATE NEW button */}
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={onCreateNew}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 text-white font-bold text-sm shadow-lg shadow-blue-500/20 transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                Create new
+                <span className="ml-1 px-1.5 py-0.5 bg-white/20 rounded-md text-[10px] font-bold tracking-wide">AI</span>
+              </motion.button>
+
+              {/* New gamma dropdown (placeholder) */}
+              <button className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-colors ${darkMode ? 'border-white/10 text-gray-300 hover:bg-white/5' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
+                <Plus className="w-3.5 h-3.5" />
+                New gamma
+                <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+              </button>
+
+              {/* Import dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setImportOpen(o => !o)}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-colors ${darkMode ? 'border-white/10 text-gray-300 hover:bg-white/5' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Import
+                  <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+                </button>
+                <AnimatePresence>
+                  {importOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      className={`absolute top-11 left-0 z-30 rounded-xl border shadow-2xl py-1 min-w-[180px] text-sm ${darkMode ? 'bg-[#1A2235] border-white/10' : 'bg-white border-gray-200'}`}
+                    >
+                      {['Upload a file', 'Import from URL', 'Import from Drive'].map(opt => (
+                        <button
+                          key={opt}
+                          onClick={() => { setImportOpen(false); onSelectMode('import'); }}
+                          className={`w-full text-left px-3 py-2 transition-colors ${darkMode ? 'text-gray-300 hover:bg-white/5 hover:text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+                        >
+                          {opt}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+
+            {/* Filter tabs + sort/view toggle */}
+            <div className={`flex items-center justify-between px-6 pb-3 flex-shrink-0`}>
+              <div className="flex items-center gap-1">
+                {FILTER_TABS.map(tab => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveFilter(tab.id)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${activeFilter === tab.id ? tabAct : tabDef}`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Sort */}
+                <button className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${mutedTxt} hover:text-current`}>
+                  <SortDesc className="w-3.5 h-3.5" /> Last edited
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+                <div className={`w-px h-4 ${darkMode ? 'bg-white/10' : 'bg-gray-200'}`} />
+                {/* Grid / List toggle */}
+                <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded transition-colors ${viewMode === 'grid' ? (darkMode ? 'bg-white/10 text-white' : 'bg-gray-200 text-gray-900') : mutedTxt}`}><Grid3X3 className="w-3.5 h-3.5" /></button>
+                <button onClick={() => setViewMode('list')} className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? (darkMode ? 'bg-white/10 text-white' : 'bg-gray-200 text-gray-900') : mutedTxt}`}><List className="w-3.5 h-3.5" /></button>
+              </div>
+            </div>
+
+            {/* Document grid */}
+            <div className="flex-1 px-6 pb-10">
+              {loading ? (
+                <div className="flex items-center justify-center py-20">
+                  <div className="w-6 h-6 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : filtered.length === 0 ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex flex-col items-center justify-center py-24 text-center"
+                >
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 flex items-center justify-center mb-4">
+                    <Presentation className="w-8 h-8 text-violet-400/60" />
+                  </div>
+                  <p className={`text-lg font-semibold mb-1 ${headerTxt}`}>No presentations yet</p>
+                  <p className={`text-sm mb-5 ${mutedTxt}`}>Create your first AI-powered presentation</p>
+                  <button
+                    onClick={onCreateNew}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white font-bold text-sm shadow-lg"
+                  >
+                    <Plus className="w-4 h-4" /> Create new
+                  </button>
+                </motion.div>
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className={viewMode === 'grid'
+                    ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4'
+                    : 'flex flex-col gap-2'
+                  }
+                >
+                  {filtered.map(doc => (
+                    <DocCard key={doc.id} item={doc} darkMode={darkMode} />
+                  ))}
+                </motion.div>
+              )}
+            </div>
           </div>
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-gray-300 group-hover:text-white transition-colors">
-              Open your presentation history
-            </p>
-            <p className="text-xs text-gray-500 mt-0.5">
-              All your previously generated decks are saved locally and ready to reload or export.
-            </p>
-          </div>
-          <ArrowRight className="w-4 h-4 text-gray-600 group-hover:text-violet-400 transition-colors flex-shrink-0" />
-        </motion.button>
-      </motion.div>
+        )}
+      </div>
+
+      <SearchModal 
+        isOpen={searchModalOpen} 
+        onClose={() => setSearchModalOpen(false)} 
+        docs={docs} 
+        darkMode={darkMode} 
+      />
     </div>
   );
 }
