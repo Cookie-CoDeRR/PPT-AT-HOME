@@ -60,7 +60,7 @@ function App() {
 
   const handleSelectMode = (modeId) => {
     if (modeId === 'template') {
-      setView('wizard');
+      setView('template-pick');   // opens the new TemplatePicker gallery
     } else if (modeId === 'paste') {
       setView('paste');
     } else {

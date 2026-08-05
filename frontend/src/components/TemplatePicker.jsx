@@ -115,7 +115,7 @@ export default function TemplatePicker({ onBack, onSelectTemplate }) {
   }, [allTemplates, activeCategory, search]);
 
   return (
-    <div className="w-full min-h-full bg-gradient-to-b from-[#e8eaf6] to-[#dde1f5] pb-20">
+    <div className="w-full min-h-screen bg-gradient-to-b from-[#eef0fb] via-[#e4e7f8] to-[#d8dcf4] pb-20">
 
       {/* Top bar */}
       <div className="flex items-center justify-between px-8 py-4">
@@ -176,14 +176,15 @@ export default function TemplatePicker({ onBack, onSelectTemplate }) {
           <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm">
             Search
           </button>
-          <div className="ml-auto">
+          <div className="ml-auto relative inline-block">
             <select
               value={sort}
               onChange={e => setSort(e.target.value)}
-              className="appearance-none bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 cursor-pointer outline-none shadow-sm"
+              className="appearance-none bg-white border border-gray-200 rounded-lg pl-3 pr-8 py-2 text-sm text-gray-700 cursor-pointer outline-none shadow-sm"
             >
               {SORT_OPTIONS.map(s => <option key={s}>{s}</option>)}
             </select>
+            <svg className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
           </div>
         </div>
 
