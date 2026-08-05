@@ -11,19 +11,19 @@ const CATEGORIES = [
 
 // ─── Static Template Data (replace with /api/templates once backend ready) ────
 const WORKSPACE_TEMPLATES = [
-  { id: 'w1', name: 'Sales Incentive Kickoff',              category: 'Sales',              thumb: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&q=80', dark: true  },
-  { id: 'w2', name: 'Budget Review',                        category: 'Reporting',          thumb: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&q=80', dark: true  },
-  { id: 'w3', name: 'Sleek Dark Slides for Corporate',      category: 'Company',            thumb: null,                                                                     dark: true  },
-  { id: 'w4', name: 'Rich Purple Slides for Presentations', category: 'Creative',           thumb: null,                                                                     dark: true  },
-  { id: 'w5', name: 'Social Media Strategy',                category: 'Marketing',          thumb: 'https://images.unsplash.com/photo-1432888498266-38ffec3eaf0a?w=400&q=80', dark: false },
-  { id: 'w6', name: 'Quarterly Pipeline Review',            category: 'Sales',              thumb: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&q=80', dark: true  },
-  { id: 'w7', name: 'Employee Handbook',                    category: 'People',             thumb: 'https://images.unsplash.com/photo-1521791136064-7986c2920216?w=400&q=80', dark: false },
-  { id: 'w8', name: 'Handbook Highlights',                  category: 'People',             thumb: null,                                                                     dark: false },
-  { id: 'w9', name: 'Project Post-Mortem',                  category: 'Project Management', thumb: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=400&q=80', dark: true  },
-  { id: 'w10',name: 'Goal Setting Framework',               category: 'Strategy',           thumb: 'https://images.unsplash.com/photo-1552664730-d307ca884978?w=400&q=80', dark: true  },
-  { id: 'w11',name: 'Photography Portfolio',                category: 'Creative',           thumb: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&q=80', dark: false },
-  { id: 'w12',name: 'Deep Blue Slides for Professional',    category: 'Company',            thumb: null,                                                                     dark: true  },
-  { id: 'w13',name: 'Light & Modern Slides for Clean',      category: 'Creative',           thumb: null,                                                                     dark: false },
+  { id: 'w1',  name: 'Sales Incentive Kickoff',              category: 'Sales',              thumb: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&q=80', dark: true  },
+  { id: 'w2',  name: 'Budget Review',                        category: 'Reporting',          thumb: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&q=80', dark: true  },
+  { id: 'w3',  name: 'Sleek Dark Slides for Corporate',      category: 'Company',            thumb: null,                                                                     dark: true  },
+  { id: 'w4',  name: 'Rich Purple Slides for Presentations', category: 'Creative',           thumb: null,                                                                     dark: true  },
+  { id: 'w5',  name: 'Social Media Strategy',                category: 'Marketing',          thumb: 'https://images.unsplash.com/photo-1432888498266-38ffec3eaf0a?w=400&q=80', dark: false },
+  { id: 'w6',  name: 'Quarterly Pipeline Review',            category: 'Sales',              thumb: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&q=80', dark: true  },
+  { id: 'w7',  name: 'Employee Handbook',                    category: 'People',             thumb: 'https://images.unsplash.com/photo-1521791136064-7986c2920216?w=400&q=80', dark: false },
+  { id: 'w8',  name: 'Handbook Highlights',                  category: 'People',             thumb: null,                                                                     dark: false },
+  { id: 'w9',  name: 'Project Post-Mortem',                  category: 'Project Management', thumb: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=400&q=80', dark: true  },
+  { id: 'w10', name: 'Goal Setting Framework',               category: 'Strategy',           thumb: 'https://images.unsplash.com/photo-1552664730-d307ca884978?w=400&q=80', dark: true  },
+  { id: 'w11', name: 'Photography Portfolio',                category: 'Creative',           thumb: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&q=80', dark: false },
+  { id: 'w12', name: 'Deep Blue Slides for Professional',    category: 'Company',            thumb: null,                                                                     dark: true  },
+  { id: 'w13', name: 'Light & Modern Slides for Clean',      category: 'Creative',           thumb: null,                                                                     dark: false },
 ];
 
 const TEMPLATES = [
@@ -46,7 +46,7 @@ const TEMPLATES = [
   { id: 't17', name: 'Company Values',                 category: 'Company',            thumb: null,                                                                       dark: false },
   { id: 't18', name: 'Audit Report',                   category: 'Reporting',          thumb: null,                                                                       dark: true  },
   { id: 't19', name: 'Minimal Dark Slides for Clean',  category: 'Creative',           thumb: null,                                                                       dark: true  },
-  { id: 't20', name: 'Startup Pitch',                  category: 'Company',            thumb: 'https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=400&q=80', dark: true  },
+  { id: 't20', name: 'Startup Pitch',                  category: 'Company',            thumb: 'https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=400&q=80',    dark: true  },
   { id: 't21', name: 'Bold Neon Slides for Creative',  category: 'Creative',           thumb: null,                                                                       dark: true  },
   { id: 't22', name: 'Dark & Dreamy Slides',           category: 'Creative',           thumb: null,                                                                       dark: true  },
   { id: 't23', name: 'Donor Update',                   category: 'Fundraising',        thumb: 'https://images.unsplash.com/photo-1532629345422-7515f3d16bb6?w=400&q=80', dark: false },
@@ -56,12 +56,15 @@ const TEMPLATES = [
 const SORT_OPTIONS = ['Recommended', 'Newest', 'Most used'];
 
 // ─── Thumbnail Card ────────────────────────────────────────────────────────────
-function TemplateCard({ template, onSelect }) {
+function TemplateCard({ template, onSelect, darkMode }) {
   const [hovered, setHovered] = useState(false);
-  const bg = template.dark
+
+  // Card background: always use dark/light per template.dark regardless of app mode
+  const cardBg = template.dark
     ? 'bg-gradient-to-br from-gray-800 to-gray-900'
     : 'bg-gradient-to-br from-slate-100 to-blue-50';
-  const textColor = template.dark ? 'text-white' : 'text-gray-800';
+  const cardText = template.dark ? 'text-white' : 'text-gray-700';
+  const labelColor = darkMode ? 'text-gray-300' : 'text-gray-700';
 
   return (
     <motion.div
@@ -69,15 +72,15 @@ function TemplateCard({ template, onSelect }) {
       transition={{ duration: 0.15 }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className="cursor-pointer group"
+      className="cursor-pointer"
       onClick={() => onSelect(template)}
     >
-      <div className={`relative rounded-xl overflow-hidden aspect-[4/3] ${bg} border border-black/10 shadow-sm`}>
+      <div className={`relative rounded-xl overflow-hidden aspect-[4/3] ${cardBg} border ${darkMode ? 'border-white/10' : 'border-black/10'} shadow-sm`}>
         {template.thumb ? (
           <img src={template.thumb} alt={template.name} className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center p-4">
-            <p className={`text-sm font-bold text-center leading-snug ${textColor} opacity-70`}>
+            <p className={`text-sm font-bold text-center leading-snug ${cardText} opacity-60`}>
               Lorem Ipsum Dolor Sit Amet
             </p>
           </div>
@@ -90,13 +93,13 @@ function TemplateCard({ template, onSelect }) {
           </div>
         )}
       </div>
-      <p className="mt-2 text-sm text-gray-700 font-medium leading-tight">{template.name}</p>
+      <p className={`mt-2 text-sm font-medium leading-tight ${labelColor}`}>{template.name}</p>
     </motion.div>
   );
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export default function TemplatePicker({ onBack, onSelectTemplate }) {
+export default function TemplatePicker({ onBack, onSelectTemplate, darkMode = true }) {
   const [activeTab, setActiveTab] = useState('templates'); // 'workspace' | 'templates'
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState(null);
@@ -114,63 +117,68 @@ export default function TemplatePicker({ onBack, onSelectTemplate }) {
     return list;
   }, [allTemplates, activeCategory, search]);
 
+  // ── Derived theme tokens ────────────────────────────────────────────────────
+  const titleColor    = darkMode ? 'text-white'    : 'text-gray-900';
+  const backColor     = darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900';
+  const manageColor   = darkMode ? 'text-violet-400 hover:text-violet-300' : 'text-blue-600 hover:text-blue-800';
+  const tabActive     = darkMode ? 'bg-white/10 border-white/20 text-white shadow-sm' : 'bg-white border-gray-300 text-gray-900 shadow-sm';
+  const tabInactive   = darkMode ? 'border-transparent text-gray-500 hover:text-gray-300' : 'border-transparent text-gray-500 hover:text-gray-800';
+  const searchBg      = darkMode ? 'bg-white/5 border-white/10' : 'bg-white border-gray-200';
+  const searchText    = darkMode ? 'text-gray-200 placeholder-gray-500' : 'text-gray-700 placeholder-gray-400';
+  const sortBg        = darkMode ? 'bg-white/5 border-white/10 text-gray-200' : 'bg-white border-gray-200 text-gray-700';
+  const pillActive    = darkMode ? 'bg-violet-600 border-violet-600 text-white' : 'bg-blue-600 border-blue-600 text-white';
+  const pillInactive  = darkMode ? 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white' : 'bg-white/70 border-gray-200 text-gray-600 hover:bg-white hover:text-gray-900';
+  const emptyColor    = darkMode ? 'text-gray-500' : 'text-gray-400';
+
   return (
-    <div className="w-full min-h-full pb-20">
+    <div className="w-full min-h-full pb-20 transition-colors duration-300">
 
       {/* Top bar */}
       <div className="flex items-center justify-between px-8 py-4">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 font-medium transition-colors"
-        >
+        <button onClick={onBack} className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${backColor}`}>
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
-        <button className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors">
+        <button className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${manageColor}`}>
           Manage templates <ExternalLink className="w-3.5 h-3.5" />
         </button>
       </div>
 
       {/* Title */}
       <div className="text-center pt-4 pb-6">
-        <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">Choose a template</h1>
+        <h1 className={`text-4xl font-extrabold tracking-tight ${titleColor}`}>Choose a template</h1>
       </div>
 
       {/* Tab + Search row */}
       <div className="max-w-5xl mx-auto px-6">
+
         {/* Tabs */}
         <div className="flex items-center gap-2 mb-4">
-          <button
-            onClick={() => setActiveTab('workspace')}
-            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium border transition-all ${
-              activeTab === 'workspace'
-                ? 'bg-white border-gray-300 text-gray-900 shadow-sm'
-                : 'bg-transparent border-transparent text-gray-500 hover:text-gray-800'
-            }`}
-          >
-            <LayoutGrid className="w-3.5 h-3.5" /> Workspace templates
-          </button>
-          <button
-            onClick={() => setActiveTab('templates')}
-            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium border transition-all ${
-              activeTab === 'templates'
-                ? 'bg-white border-gray-300 text-gray-900 shadow-sm'
-                : 'bg-transparent border-transparent text-gray-500 hover:text-gray-800'
-            }`}
-          >
-            <LayoutGrid className="w-3.5 h-3.5" /> Templates
-          </button>
+          {[
+            { id: 'workspace', label: 'Workspace templates' },
+            { id: 'templates', label: 'Templates' },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium border transition-all ${
+                activeTab === tab.id ? tabActive : tabInactive
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" /> {tab.label}
+            </button>
+          ))}
         </div>
 
         {/* Search + Sort */}
         <div className="flex items-center gap-3 mb-4">
-          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 flex-1 max-w-xs shadow-sm">
+          <div className={`flex items-center gap-2 rounded-lg px-3 py-2 flex-1 max-w-xs border shadow-sm ${searchBg}`}>
             <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
             <input
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search templates"
-              className="text-sm text-gray-700 outline-none w-full bg-transparent placeholder-gray-400"
+              className={`text-sm outline-none w-full bg-transparent ${searchText}`}
             />
           </div>
           <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm">
@@ -180,11 +188,13 @@ export default function TemplatePicker({ onBack, onSelectTemplate }) {
             <select
               value={sort}
               onChange={e => setSort(e.target.value)}
-              className="appearance-none bg-white border border-gray-200 rounded-lg pl-3 pr-8 py-2 text-sm text-gray-700 cursor-pointer outline-none shadow-sm"
+              className={`appearance-none rounded-lg pl-3 pr-8 py-2 text-sm cursor-pointer outline-none shadow-sm border ${sortBg}`}
             >
               {SORT_OPTIONS.map(s => <option key={s}>{s}</option>)}
             </select>
-            <svg className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+            <svg className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
           </div>
         </div>
 
@@ -195,9 +205,7 @@ export default function TemplatePicker({ onBack, onSelectTemplate }) {
               key={cat}
               onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
               className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
-                activeCategory === cat
-                  ? 'bg-blue-600 border-blue-600 text-white'
-                  : 'bg-white/70 border-gray-200 text-gray-600 hover:bg-white hover:text-gray-900'
+                activeCategory === cat ? pillActive : pillInactive
               }`}
             >
               {cat}
@@ -207,7 +215,7 @@ export default function TemplatePicker({ onBack, onSelectTemplate }) {
 
         {/* Template grid */}
         {filtered.length === 0 ? (
-          <div className="text-center py-20 text-gray-400">
+          <div className={`text-center py-20 ${emptyColor}`}>
             <p className="text-lg font-medium">No templates found</p>
             <p className="text-sm mt-1">Try a different search or category</p>
           </div>
@@ -220,7 +228,7 @@ export default function TemplatePicker({ onBack, onSelectTemplate }) {
             className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5"
           >
             {filtered.map(t => (
-              <TemplateCard key={t.id} template={t} onSelect={onSelectTemplate} />
+              <TemplateCard key={t.id} template={t} onSelect={onSelectTemplate} darkMode={darkMode} />
             ))}
           </motion.div>
         )}

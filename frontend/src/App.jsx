@@ -8,7 +8,7 @@ import Workspace from './components/Workspace';
 import HistoryPanel from './components/HistoryPanel';
 import SettingsPanel from './components/SettingsPanel';
 import axios from 'axios';
-import { Presentation, Loader2, History, Settings } from 'lucide-react';
+import { Presentation, Loader2, History, Settings, Sun, Moon } from 'lucide-react';
 
 function App() {
   const [settings, setSettings] = useState({
@@ -29,6 +29,16 @@ function App() {
   
   // Navigation: 'home' | 'create' | 'paste' | 'wizard' | 'template-pick' | 'workspace'
   const [view, setView] = useState('template-pick');
+
+  // Universal dark/light mode (persisted in localStorage)
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('darkMode');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+  const toggleDarkMode = () => setDarkMode(prev => {
+    localStorage.setItem('darkMode', JSON.stringify(!prev));
+    return !prev;
+  });
 
   const [slidesJson, setSlidesJson] = useState(null);
   const [title, setTitle] = useState('');
@@ -158,9 +168,9 @@ function App() {
 
   return (
     <div className={`min-h-screen text-gray-100 selection:bg-violet-500/30 transition-colors duration-300 ${
-      view === 'template-pick'
-        ? 'bg-gradient-to-b from-[#eef0fb] via-[#e4e7f8] to-[#d8dcf4]'
-        : 'bg-[#0B0F17]'
+      darkMode
+        ? 'bg-[#0B0F17]'
+        : 'bg-gradient-to-b from-[#eef0fb] via-[#e4e7f8] to-[#d8dcf4]'
     }`}>
       {showHistory && <HistoryPanel onSelectHistory={handleSelectHistory} onClose={() => setShowHistory(false)} />}
       
@@ -183,27 +193,43 @@ function App() {
 
       {/* Top Navigation */}
       <header className={`w-full flex items-center justify-between p-4 px-8 border-b sticky top-0 z-50 backdrop-blur-md transition-colors duration-300 ${
-        view === 'template-pick'
-          ? 'border-black/5 bg-[#eef0fb]/90'
-          : 'border-white/5 bg-[#0B0F17]/80'
+        darkMode
+          ? 'border-white/5 bg-[#0B0F17]/80'
+          : 'border-black/5 bg-white/80'
       }`}>
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => { setSlidesJson(null); setDbId(null); setView('home'); }}>
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-500/20">
                <Presentation className="w-5 h-5 text-white" />
             </div>
-            <h1 className={`text-xl font-bold tracking-tight ${view === 'template-pick' ? 'text-gray-900' : 'text-white'}`}>Gamma<span className="text-violet-500">Clone</span></h1>
+            <h1 className={`text-xl font-bold tracking-tight ${darkMode ? 'text-white' : 'text-gray-900'}`}>Gamma<span className="text-violet-500">Clone</span></h1>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
             {view !== 'home' && (
-                <button onClick={() => { setSlidesJson(null); setDbId(null); setView('home'); }} className={`text-sm font-medium transition-colors ${view === 'template-pick' ? 'text-gray-500 hover:text-gray-900' : 'text-gray-400 hover:text-white'}`}>
+                <button onClick={() => { setSlidesJson(null); setDbId(null); setView('home'); }} className={`text-sm font-medium transition-colors ${darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}>
                     Home
                 </button>
             )}
-            <button onClick={() => setShowHistory(true)} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${view === 'template-pick' ? 'bg-black/5 hover:bg-black/10 border-black/10 text-gray-700' : 'bg-white/5 hover:bg-white/10 border-white/5 text-gray-300'}`}>
+            <button onClick={() => setShowHistory(true)} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
+              darkMode ? 'bg-white/5 hover:bg-white/10 border-white/5 text-gray-300' : 'bg-black/5 hover:bg-black/10 border-black/10 text-gray-700'
+            }`}>
                 <History className="w-4 h-4" /> History
             </button>
-            <button onClick={() => setShowSettings(true)} className={`flex items-center justify-center p-2 rounded-lg transition-colors border ${view === 'template-pick' ? 'bg-black/5 hover:bg-black/10 border-black/10' : 'bg-white/5 hover:bg-white/10 border-white/5'}`} title="Settings">
-                <Settings className={`w-4 h-4 ${view === 'template-pick' ? 'text-gray-600' : 'text-gray-400'}`} />
+            <button onClick={() => setShowSettings(true)} className={`flex items-center justify-center p-2 rounded-lg transition-colors border ${
+              darkMode ? 'bg-white/5 hover:bg-white/10 border-white/5' : 'bg-black/5 hover:bg-black/10 border-black/10'
+            }`} title="Settings">
+                <Settings className={`w-4 h-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`} />
+            </button>
+            {/* Dark / Light Mode Toggle */}
+            <button
+              onClick={toggleDarkMode}
+              title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              className={`flex items-center justify-center p-2 rounded-lg transition-all duration-200 border ${
+                darkMode
+                  ? 'bg-yellow-500/10 hover:bg-yellow-500/20 border-yellow-500/20 text-yellow-400 hover:text-yellow-300'
+                  : 'bg-gray-900/10 hover:bg-gray-900/20 border-gray-900/20 text-gray-700 hover:text-gray-900'
+              }`}
+            >
+              {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
         </div>
       </header>
@@ -244,8 +270,8 @@ function App() {
         {view === 'template-pick' && (
             <TemplatePicker
               onBack={() => setView('home')}
+              darkMode={darkMode}
               onSelectTemplate={(template) => {
-                // Pre-fill the generation with the template's name as prompt
                 handleGenerateJson({
                   prompt: `Create a ${template.name} presentation`,
                   contentType: 'presentation',
