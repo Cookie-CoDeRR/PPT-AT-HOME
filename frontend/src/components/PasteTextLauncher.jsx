@@ -61,7 +61,7 @@ Next steps + ownership
 • ...`;
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export default function PasteTextLauncher({ onGenerate, isGenerating, onBack }) {
+export default function PasteTextLauncher({ onGenerate, isGenerating, onBack, darkMode = true }) {
   const [contentType, setContentType] = useState('presentation');
   const [text, setText] = useState('');
   const [mode, setMode] = useState('generate_outline');
@@ -99,6 +99,20 @@ export default function PasteTextLauncher({ onGenerate, isGenerating, onBack }) 
     });
   };
 
+  // Theme tokens
+  const titleColor = darkMode ? 'text-white' : 'text-gray-900';
+  const subtitleColor = darkMode ? 'text-gray-400' : 'text-gray-600';
+  const backColor = darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900';
+  const textareaBg = darkMode
+    ? 'bg-white/5 border-white/10 text-gray-100 placeholder-gray-500'
+    : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 shadow-sm';
+  const tipBg = darkMode
+    ? 'bg-white/4 border-white/10 text-gray-300'
+    : 'bg-white border-gray-200 shadow-sm text-gray-800';
+  const selectBg = darkMode
+    ? 'bg-white/5 border-white/15 text-gray-300'
+    : 'bg-white border-gray-200 text-gray-800 shadow-sm';
+
   return (
     <div className="w-full min-h-full flex flex-col items-center px-4 pt-10 pb-20">
 
@@ -107,7 +121,7 @@ export default function PasteTextLauncher({ onGenerate, isGenerating, onBack }) 
         <div className="w-full max-w-5xl mb-6">
           <button
             onClick={onBack}
-            className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors"
+            className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${backColor}`}
           >
             <ArrowLeft className="w-4 h-4" /> Back
           </button>
@@ -122,11 +136,11 @@ export default function PasteTextLauncher({ onGenerate, isGenerating, onBack }) 
       >
         <div className="flex items-center justify-center gap-3 mb-3">
           <div className="w-12 h-12 rounded-2xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
-            <FileText className="w-6 h-6 text-blue-400" />
+            <FileText className="w-6 h-6 text-blue-500" />
           </div>
-          <h1 className="text-4xl font-extrabold text-white tracking-tight">Paste in text</h1>
+          <h1 className={`text-4xl font-extrabold tracking-tight ${titleColor}`}>Paste in text</h1>
         </div>
-        <p className="text-gray-400 text-base">What would you like to create?</p>
+        <p className={`text-base ${subtitleColor}`}>What would you like to create?</p>
       </motion.div>
 
       {/* Content Type Tabs */}
@@ -145,8 +159,8 @@ export default function PasteTextLauncher({ onGenerate, isGenerating, onBack }) 
               onClick={() => setContentType(ct.id)}
               className={`relative flex flex-col items-center gap-1 px-4 py-2.5 rounded-xl border text-xs font-medium transition-all ${
                 isActive
-                  ? 'bg-blue-600/20 border-blue-500 text-blue-400'
-                  : 'bg-white/4 border-white/10 text-gray-400 hover:bg-white/8 hover:text-white hover:border-white/20'
+                  ? (darkMode ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-blue-600 border-blue-600 text-white shadow-sm')
+                  : (darkMode ? 'bg-white/4 border-white/10 text-gray-400 hover:bg-white/8 hover:text-white' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900 shadow-sm')
               }`}
             >
               {ct.badge && (
@@ -157,7 +171,7 @@ export default function PasteTextLauncher({ onGenerate, isGenerating, onBack }) 
               <Icon className="w-4 h-4" />
               {ct.label}
               {isActive && (
-                <span className="absolute top-1 left-1 w-2 h-2 rounded-full bg-blue-500 border border-blue-300" />
+                <span className={`absolute top-1 left-1 w-2 h-2 rounded-full border ${darkMode ? 'bg-blue-500 border-blue-300' : 'bg-white border-blue-400'}`} />
               )}
             </button>
           );
@@ -174,14 +188,14 @@ export default function PasteTextLauncher({ onGenerate, isGenerating, onBack }) 
           className="mb-6"
         >
           <div className="relative inline-flex items-center gap-2">
-            <span className="text-xs text-gray-500 mr-1">⇄</span>
+            <span className="text-xs text-gray-400 mr-1">⇄</span>
             <select
               value={subOpt.value}
               onChange={e => subOpt.onChange(e.target.value)}
-              className="appearance-none bg-white/5 border border-white/15 rounded-lg pl-3 pr-7 py-1.5 text-sm text-gray-300 outline-none cursor-pointer hover:bg-white/10 transition-colors focus:border-blue-500/40"
+              className={`appearance-none rounded-lg pl-3 pr-7 py-1.5 text-sm outline-none cursor-pointer hover:opacity-90 transition-colors focus:border-blue-500/40 ${selectBg}`}
             >
               {subOpt.options.map(opt => (
-                <option key={opt} value={opt}>{opt}</option>
+                <option key={opt} value={opt} className={darkMode ? 'bg-[#131B2A] text-white' : 'bg-white text-gray-900'}>{opt}</option>
               ))}
             </select>
             <svg className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
@@ -198,29 +212,29 @@ export default function PasteTextLauncher({ onGenerate, isGenerating, onBack }) 
       >
         {/* Left: Textarea */}
         <div className="flex-1 flex flex-col">
-          <p className="text-sm text-gray-400 mb-3 text-center lg:text-left">
+          <p className={`text-sm mb-3 text-center lg:text-left ${subtitleColor}`}>
             Paste in the notes, outline or text content you'd like to use
           </p>
           <textarea
             value={text}
             onChange={e => setText(e.target.value)}
             placeholder="Type or paste in content here"
-            className="flex-1 min-h-[260px] w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm text-gray-100 placeholder-gray-500 resize-none outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/30 transition-all"
+            className={`flex-1 min-h-[260px] w-full rounded-2xl px-5 py-4 text-sm resize-none outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/30 transition-all ${textareaBg}`}
           />
         </div>
 
         {/* Right: Optional tip panel */}
         <div className="lg:w-72 flex-shrink-0">
-          <div className="bg-white/4 border border-white/10 rounded-2xl p-4 h-full">
-            <p className="text-xs font-semibold text-gray-300 mb-2 flex items-center gap-1.5">
-              <Wand2 className="w-3.5 h-3.5 text-yellow-400" />
+          <div className={`rounded-2xl p-4 h-full border ${tipBg}`}>
+            <p className={`text-xs font-semibold mb-2 flex items-center gap-1.5 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+              <Wand2 className="w-3.5 h-3.5 text-amber-400" />
               Optional: section-by-section control
             </p>
-            <p className="text-xs text-gray-400 mb-3 leading-relaxed">
+            <p className={`text-xs mb-3 leading-relaxed ${subtitleColor}`}>
               Know what you want in each section? Add three dashes — — — between each section.
             </p>
-            <p className="text-xs text-gray-500 mb-2">Example:</p>
-            <pre className="text-[11px] text-gray-400 leading-relaxed whitespace-pre-wrap bg-white/5 rounded-xl p-3 border border-white/8 font-sans">
+            <p className="text-xs text-gray-400 mb-2">Example:</p>
+            <pre className={`text-[11px] leading-relaxed whitespace-pre-wrap rounded-xl p-3 border font-sans ${darkMode ? 'bg-white/5 border-white/8 text-gray-400' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
 {SECTION_EXAMPLE}
             </pre>
           </div>
@@ -234,7 +248,7 @@ export default function PasteTextLauncher({ onGenerate, isGenerating, onBack }) 
         transition={{ delay: 0.16 }}
         className="w-full max-w-5xl mb-8"
       >
-        <p className="text-sm text-gray-400 mb-3 text-center">What do you want to do with this content?</p>
+        <p className={`text-sm mb-3 text-center ${subtitleColor}`}>What do you want to do with this content?</p>
         <div className="flex flex-col gap-2">
           {GENERATION_MODES.map(m => {
             const Icon = m.icon;
@@ -245,22 +259,22 @@ export default function PasteTextLauncher({ onGenerate, isGenerating, onBack }) 
                 onClick={() => setMode(m.id)}
                 className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl border text-left transition-all ${
                   isSelected
-                    ? 'border-blue-500/50 bg-blue-500/10'
-                    : 'border-white/8 bg-white/4 hover:border-white/20 hover:bg-white/8'
+                    ? (darkMode ? 'border-blue-500/50 bg-blue-500/10' : 'border-blue-500 bg-blue-50/80 shadow-sm')
+                    : (darkMode ? 'border-white/8 bg-white/4 hover:border-white/20 hover:bg-white/8' : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50 shadow-sm')
                 }`}
               >
                 <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
-                  isSelected ? 'border-blue-500' : 'border-gray-500'
+                  isSelected ? 'border-blue-500' : 'border-gray-400'
                 }`}>
                   {isSelected && <div className="w-2 h-2 rounded-full bg-blue-500" />}
                 </div>
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                  isSelected ? 'bg-blue-500/20' : 'bg-white/5'
+                  isSelected ? 'bg-blue-500/20' : (darkMode ? 'bg-white/5' : 'bg-gray-100')
                 }`}>
-                  <Icon className={`w-4 h-4 ${isSelected ? 'text-blue-400' : 'text-gray-400'}`} />
+                  <Icon className={`w-4 h-4 ${isSelected ? 'text-blue-500' : 'text-gray-400'}`} />
                 </div>
                 <div>
-                  <p className={`text-sm font-medium ${isSelected ? 'text-white' : 'text-gray-300'}`}>{m.title}</p>
+                  <p className={`text-sm font-medium ${isSelected ? (darkMode ? 'text-white' : 'text-gray-900') : (darkMode ? 'text-gray-300' : 'text-gray-800')}`}>{m.title}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{m.description}</p>
                 </div>
               </button>
@@ -285,7 +299,7 @@ export default function PasteTextLauncher({ onGenerate, isGenerating, onBack }) 
         </button>
         <p className="text-xs text-gray-500">
           You can also{' '}
-          <button className="underline hover:text-gray-300 transition-colors">import files</button>
+          <button className="underline hover:text-gray-400 transition-colors">import files</button>
         </p>
       </motion.div>
     </div>

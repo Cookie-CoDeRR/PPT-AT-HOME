@@ -154,7 +154,7 @@ function PillDropdown({ label, value, options, onChange }) {
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 
-export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, onBack }) {
+export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, onBack, darkMode = true }) {
   const [prompt, setPrompt] = useState('');
   const [contentType, setContentType] = useState('presentation');
   const [slideCount, setSlideCount] = useState(10);
@@ -272,6 +272,19 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
 
   const orientationLabel = ORIENTATIONS.find(o => o.value === orientation)?.label?.split(' ')[0] || 'Landscape';
 
+  // Dynamic theme classes
+  const titleColor = darkMode ? 'text-white' : 'text-gray-900';
+  const subtitleColor = darkMode ? 'text-gray-400' : 'text-gray-600';
+  const backColor = darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900';
+  const promptBoxBg = darkMode ? 'bg-[#131b2e] border-white/10' : 'bg-white border-gray-200 shadow-xl';
+  const promptInputTxt = darkMode ? 'text-gray-100 placeholder-gray-500' : 'text-gray-900 placeholder-gray-400';
+  const exampleCardBg = darkMode
+    ? 'bg-white/4 border-white/8 hover:border-violet-500/30 hover:bg-white/8 text-gray-300 group-hover:text-white'
+    : 'bg-white border-gray-200 shadow-sm hover:border-violet-400 hover:bg-violet-50/50 text-gray-800 group-hover:text-gray-900';
+  const shuffleBtn = darkMode
+    ? 'bg-white/5 border-white/10 text-gray-400 hover:text-white hover:bg-white/10'
+    : 'bg-white border-gray-200 text-gray-600 hover:text-gray-900 hover:bg-gray-50 shadow-sm';
+
   return (
     <div className="flex flex-col items-center w-full min-h-full px-4 pt-10 pb-16">
 
@@ -280,7 +293,7 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
         <div className="w-full max-w-3xl mb-6">
           <button
             onClick={onBack}
-            className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors"
+            className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${backColor}`}
           >
             <ArrowLeft className="w-4 h-4" /> Back
           </button>
@@ -294,8 +307,8 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
         transition={{ duration: 0.4 }}
         className="text-center mb-8"
       >
-        <h1 className="text-4xl font-extrabold tracking-tight text-white mb-2">Generate</h1>
-        <p className="text-gray-400 text-base">What would you like to create today?</p>
+        <h1 className={`text-4xl font-extrabold tracking-tight mb-2 ${titleColor}`}>Generate</h1>
+        <p className={`text-base ${subtitleColor}`}>What would you like to create today?</p>
       </motion.div>
 
       {/* Content type tabs */}
@@ -314,13 +327,13 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
               onClick={() => !ct.soon && setContentType(ct.id)}
               className={`relative flex flex-col items-center gap-1.5 px-5 py-3 rounded-xl border text-xs font-semibold transition-all min-w-[90px] ${
                 active
-                  ? 'bg-violet-500/15 border-violet-500/50 text-violet-300'
+                  ? (darkMode ? 'bg-violet-500/15 border-violet-500/50 text-violet-300' : 'bg-violet-600 border-violet-600 text-white shadow-sm')
                   : ct.soon
-                    ? 'bg-white/3 border-white/5 text-gray-600 cursor-not-allowed'
-                    : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-gray-200 cursor-pointer'
+                    ? (darkMode ? 'bg-white/3 border-white/5 text-gray-600 cursor-not-allowed' : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed')
+                    : (darkMode ? 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-gray-200 cursor-pointer' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900 cursor-pointer shadow-sm')
               }`}
             >
-              <Icon className={`w-4 h-4 ${active ? 'text-violet-400' : ct.soon ? 'text-gray-700' : 'text-gray-500'}`} />
+              <Icon className={`w-4 h-4 ${active ? (darkMode ? 'text-violet-400' : 'text-white') : ct.soon ? 'text-gray-400' : (darkMode ? 'text-gray-400' : 'text-gray-600')}`} />
               {ct.label}
               {ct.badge && (
                 <span className="absolute -top-1.5 -right-1.5 text-[9px] font-bold bg-emerald-500 text-white px-1.5 py-0.5 rounded-full leading-none">
@@ -455,9 +468,11 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
         <div className="relative">
           <button
             onClick={() => setModelDropdown(o => !o)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/8 border border-white/10 hover:bg-white/12 text-sm text-gray-300 font-medium transition-all"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${
+              darkMode ? 'bg-white/8 border-white/10 hover:bg-white/12 text-gray-300' : 'bg-white border-gray-200 hover:bg-gray-50 text-gray-700 shadow-sm'
+            }`}
           >
-            <Monitor className="w-3 h-3 text-violet-400" />
+            <Monitor className="w-3 h-3 text-violet-500" />
             <span className="max-w-[120px] truncate text-xs">{activeModel}</span>
             <ChevronDown className="w-3 h-3 opacity-50" />
           </button>
@@ -466,15 +481,17 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
               <motion.div
                 initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }}
                 transition={{ duration: 0.15 }}
-                className="absolute top-full mt-2 left-0 z-50 w-56 glass-panel py-1.5 shadow-2xl"
+                className={`absolute top-full mt-2 left-0 z-50 w-56 rounded-xl border py-1.5 shadow-2xl ${
+                  darkMode ? 'bg-[#131b2e] border-white/10 text-gray-200' : 'bg-white border-gray-200 text-gray-800'
+                }`}
               >
                 {availableModels.map(m => (
                   <button key={m} onClick={() => { setActiveModel(m); setModelDropdown(false); }}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-white/10 truncate">
+                    className={`w-full text-left px-4 py-2 text-sm truncate ${darkMode ? 'hover:bg-white/10 text-gray-200' : 'hover:bg-gray-100 text-gray-800'}`}>
                     {m}
                   </button>
                 ))}
-                <div className="px-4 pt-2 pb-1 text-xs text-gray-500 border-t border-white/10">From local LLM server</div>
+                <div className={`px-4 pt-2 pb-1 text-xs border-t ${darkMode ? 'text-gray-500 border-white/10' : 'text-gray-400 border-gray-100'}`}>From local LLM server</div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -488,7 +505,7 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
         transition={{ delay: 0.16 }}
         className="w-full max-w-3xl mb-3"
       >
-        <div className="relative glass-panel overflow-hidden transition-all focus-within:ring-2 focus-within:ring-violet-500/40 focus-within:border-violet-500/40">
+        <div className={`relative rounded-2xl border overflow-hidden transition-all focus-within:ring-2 focus-within:ring-violet-500/40 focus-within:border-violet-500/40 ${promptBoxBg}`}>
           {/* Attachment chips */}
           {(uploadedFile || referenceImage) && (
             <div className="flex flex-wrap gap-2 px-5 pt-4 pb-0">
@@ -515,7 +532,7 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
             placeholder="Describe what you'd like to make..."
             rows={3}
-            className="w-full bg-transparent text-gray-100 placeholder-gray-500 text-base px-5 pt-5 pb-3 resize-none outline-none border-none focus:ring-0"
+            className={`w-full bg-transparent text-base px-5 pt-5 pb-3 resize-none outline-none border-none focus:ring-0 ${promptInputTxt}`}
           />
 
           {/* Bottom toolbar inside the input for graphic, or bottom row for others */}
@@ -523,8 +540,10 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
             <div className="px-5 pb-4">
               <div {...getImageProps()} className="inline-block">
                 <input {...getImageInput()} />
-                <button className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-xs text-gray-300 font-medium transition-colors">
-                  <Camera className="w-3.5 h-3.5 text-blue-400" />
+                <button className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors ${
+                  darkMode ? 'bg-white/5 border-white/10 hover:bg-white/10 text-gray-300' : 'bg-gray-100 border-gray-200 hover:bg-gray-200 text-gray-700'
+                }`}>
+                  <Camera className="w-3.5 h-3.5 text-blue-500" />
                   Add reference
                 </button>
               </div>
@@ -534,13 +553,13 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
               <div className="flex items-center gap-1">
                 <div {...getRAGProps()}>
                   <input {...getRAGInput()} />
-                  <button className="p-2 rounded-lg text-gray-500 hover:text-blue-400 hover:bg-white/8 transition-colors" title="Attach document (RAG)">
+                  <button className={`p-2 rounded-lg transition-colors ${darkMode ? 'text-gray-500 hover:text-blue-400 hover:bg-white/8' : 'text-gray-400 hover:text-blue-600 hover:bg-gray-100'}`} title="Attach document (RAG)">
                     <Paperclip className="w-4 h-4" />
                   </button>
                 </div>
                 <div {...getImageProps()}>
                   <input {...getImageInput()} />
-                  <button className="p-2 rounded-lg text-gray-500 hover:text-purple-400 hover:bg-white/8 transition-colors" title="Attach reference image">
+                  <button className={`p-2 rounded-lg transition-colors ${darkMode ? 'text-gray-500 hover:text-purple-400 hover:bg-white/8' : 'text-gray-400 hover:text-purple-600 hover:bg-gray-100'}`} title="Attach reference image">
                     <Camera className="w-4 h-4" />
                   </button>
                 </div>
@@ -565,8 +584,8 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
           className="w-full max-w-3xl"
         >
           <div className="flex items-center justify-between mb-3">
-            <p className="text-sm text-gray-300 font-medium">Image style</p>
-            <button className="text-xs text-blue-400 hover:text-blue-300">See more</button>
+            <p className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Image style</p>
+            <button className="text-xs text-blue-500 hover:text-blue-400">See more</button>
           </div>
           
           <div className="flex gap-3 overflow-x-auto pb-4 hide-scrollbar">
@@ -574,12 +593,12 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
               <button
                 key={style.id}
                 onClick={() => setGraphicStyle(style.id)}
-                className={`flex-shrink-0 w-28 h-28 rounded-xl overflow-hidden relative border-2 transition-all ${graphicStyle === style.id ? 'border-blue-500' : 'border-transparent hover:border-white/20'}`}
+                className={`flex-shrink-0 w-28 h-28 rounded-xl overflow-hidden relative border-2 transition-all ${graphicStyle === style.id ? 'border-blue-500' : (darkMode ? 'border-transparent hover:border-white/20' : 'border-gray-200 hover:border-gray-400')}`}
               >
                 {style.id === 'none' ? (
-                  <div className="w-full h-full bg-white/5 flex items-center justify-center">
-                    <div className="w-8 h-8 rounded-full border border-gray-500 flex items-center justify-center">
-                      <div className="w-6 h-[1px] bg-gray-500 rotate-45" />
+                  <div className={`w-full h-full flex items-center justify-center ${darkMode ? 'bg-white/5' : 'bg-gray-100'}`}>
+                    <div className="w-8 h-8 rounded-full border border-gray-400 flex items-center justify-center">
+                      <div className="w-6 h-[1px] bg-gray-400 rotate-45" />
                     </div>
                   </div>
                 ) : (
@@ -600,39 +619,39 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
           </div>
 
           <div className="w-full mt-2 mb-8 p-3 rounded-xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-between">
-            <div className="flex items-center gap-2 text-orange-400 text-sm">
-              <span className="w-4 h-4 rounded-full border border-orange-400 flex items-center justify-center text-[10px] font-bold">!</span>
+            <div className="flex items-center gap-2 text-orange-500 text-sm">
+              <span className="w-4 h-4 rounded-full border border-orange-500 flex items-center justify-center text-[10px] font-bold">!</span>
               <span className="font-semibold">You're out of credits.</span>
-              <span className="text-orange-200">Upgrade to continue.</span>
+              <span className={darkMode ? 'text-orange-200' : 'text-orange-700'}>Upgrade to continue.</span>
             </div>
-            <button className="px-4 py-1.5 bg-white text-gray-900 text-xs font-bold rounded-full hover:bg-gray-100 transition-colors">
+            <button className="px-4 py-1.5 bg-violet-600 text-white text-xs font-bold rounded-full hover:bg-violet-500 transition-colors shadow-md">
               Upgrade
             </button>
           </div>
 
           <div className="w-full flex items-center gap-4 mb-6 opacity-60 mt-10">
-            <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent to-white/20" />
-            <span className="text-xs text-gray-400">Or, start with a template</span>
-            <div className="h-[1px] flex-1 bg-gradient-to-l from-transparent to-white/20" />
+            <div className={`h-[1px] flex-1 ${darkMode ? 'bg-gradient-to-r from-transparent to-white/20' : 'bg-gradient-to-r from-transparent to-black/20'}`} />
+            <span className={`text-xs ${subtitleColor}`}>Or, start with a template</span>
+            <div className={`h-[1px] flex-1 ${darkMode ? 'bg-gradient-to-l from-transparent to-white/20' : 'bg-gradient-to-l from-transparent to-black/20'}`} />
           </div>
 
           {/* Step 1: Open */}
-          <div className="w-full rounded-xl border border-white/10 bg-white/5 overflow-hidden mb-3">
+          <div className={`w-full rounded-xl border overflow-hidden mb-3 ${darkMode ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-white shadow-sm'}`}>
             <div className="p-4 pb-2 flex items-center justify-between cursor-pointer">
               <div className="flex items-center gap-3">
-                <div className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-bold">1</div>
-                <span className="text-sm font-medium text-gray-200">What do you want to design?</span>
+                <div className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-500 flex items-center justify-center text-xs font-bold">1</div>
+                <span className={`text-sm font-medium ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>What do you want to design?</span>
               </div>
-              <ChevronUp className="w-4 h-4 text-gray-500" />
+              <ChevronUp className="w-4 h-4 text-gray-400" />
             </div>
             
             <div className="p-4 pt-2 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
               {GRAPHIC_TEMPLATES.map((tpl, i) => (
                 <div key={i} className="group cursor-pointer">
-                  <div className="w-full aspect-square rounded-lg overflow-hidden border border-white/10 group-hover:border-blue-500/50 mb-2 transition-colors">
+                  <div className={`w-full aspect-square rounded-lg overflow-hidden border mb-2 transition-colors ${darkMode ? 'border-white/10 group-hover:border-blue-500/50' : 'border-gray-200 group-hover:border-blue-500'}`}>
                     <img src={tpl.img} alt={tpl.label} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                   </div>
-                  <h4 className="text-[13px] font-medium text-gray-200 group-hover:text-blue-400 transition-colors">{tpl.label}</h4>
+                  <h4 className={`text-[13px] font-medium transition-colors ${darkMode ? 'text-gray-200 group-hover:text-blue-400' : 'text-gray-800 group-hover:text-blue-600'}`}>{tpl.label}</h4>
                   <p className="text-[11px] text-gray-500 leading-tight mt-0.5">{tpl.desc}</p>
                 </div>
               ))}
@@ -640,24 +659,24 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
           </div>
 
           {/* Step 2: Closed */}
-          <div className="w-full rounded-xl border border-white/10 bg-white/5 overflow-hidden mb-3 opacity-60">
+          <div className={`w-full rounded-xl border overflow-hidden mb-3 opacity-60 ${darkMode ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-white'}`}>
             <div className="p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-6 h-6 rounded-full bg-white/10 text-gray-400 flex items-center justify-center text-xs font-bold">2</div>
-                <span className="text-sm font-medium text-gray-400">Pick a layout</span>
+                <div className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${darkMode ? 'bg-white/10 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>2</div>
+                <span className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Pick a layout</span>
               </div>
-              <ChevronDown className="w-4 h-4 text-gray-600" />
+              <ChevronDown className="w-4 h-4 text-gray-400" />
             </div>
           </div>
 
           {/* Step 3: Closed */}
-          <div className="w-full rounded-xl border border-white/10 bg-white/5 overflow-hidden mb-8 opacity-60">
+          <div className={`w-full rounded-xl border overflow-hidden mb-8 opacity-60 ${darkMode ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-white'}`}>
             <div className="p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-6 h-6 rounded-full bg-white/10 text-gray-400 flex items-center justify-center text-xs font-bold">3</div>
-                <span className="text-sm font-medium text-gray-400">Theme & prompt</span>
+                <div className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${darkMode ? 'bg-white/10 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>3</div>
+                <span className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Theme & prompt</span>
               </div>
-              <ChevronDown className="w-4 h-4 text-gray-600" />
+              <ChevronDown className="w-4 h-4 text-gray-400" />
             </div>
           </div>
 
@@ -681,17 +700,17 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
               <motion.button
                 key={i} initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.25 + i * 0.04 }}
                 whileHover={{ scale: 1.02, y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => setPrompt(ep.text)}
-                className="group relative flex items-start gap-3 p-4 rounded-xl bg-white/4 border border-white/8 hover:border-violet-500/30 hover:bg-white/8 text-left transition-all"
+                className={`group relative flex items-start gap-3 p-4 rounded-xl text-left transition-all ${exampleCardBg}`}
               >
                 <span className="text-xl leading-none flex-shrink-0 mt-0.5">{ep.icon}</span>
-                <p className="text-xs text-gray-300 group-hover:text-white transition-colors leading-relaxed flex-1">{ep.text}</p>
-                <Plus className="w-3.5 h-3.5 text-gray-600 group-hover:text-violet-400 transition-colors flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100" />
+                <p className={`text-xs leading-relaxed flex-1 ${darkMode ? 'text-gray-300 group-hover:text-white' : 'text-gray-700 group-hover:text-gray-900'}`}>{ep.text}</p>
+                <Plus className="w-3.5 h-3.5 text-gray-400 group-hover:text-violet-500 transition-colors flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100" />
               </motion.button>
             ))}
           </div>
           <div className="flex justify-center">
             <button onClick={() => setExamplePrompts(getRandomSix(currentPromptsPool))}
-              className="flex items-center gap-2 px-5 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-sm text-gray-400 hover:text-white transition-all font-medium">
+              className={`flex items-center gap-2 px-5 py-2 rounded-full border text-sm transition-all font-medium ${shuffleBtn}`}>
               <Shuffle className="w-4 h-4" /> Shuffle
             </button>
           </div>
