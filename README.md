@@ -5,8 +5,15 @@ This full-stack application allows you to generate professional PowerPoint (.ppt
 
 ## Architecture
 
-- **Frontend**: React (Vite) + Tailwind CSS + Lucide Icons
-- **Backend**: Node.js (Express) + `pptxgenjs` + OpenAI Node SDK (for local compatibility)
+- **Frontend**: React (Vite) + Tailwind CSS + Lucide Icons + Recharts
+- **Backend**: Node.js (Express) + `pptxgenjs` + OpenAI Node SDK (for local compatibility) + Cheerio (WebRAG)
+
+## Key Features
+
+- **Advanced AI Layout Router:** Intelligently predicts structurally varied slide sequences (e.g., `title_hero`, `bento_grid`, `two_column_image`, `title_split`) instead of just boring bullet points. Supports local fine-tuned Qwen layout models.
+- **WebRAG Context Engine:** Automatically scrapes the web (via DuckDuckGo) for real-time context and facts about your topic, injecting compressed factual context directly into the local LLM.
+- **Dynamic React Previews:** View exactly how your presentation will look in a beautiful 16:9 React canvas before exporting. Includes interactive data tables and animated pie/bar charts.
+- **Native PPTX Compiler:** Exports flawless `.pptx` files with intelligent native font mapping and dynamic auto-scaling text engines to ensure long AI-generated text never overflows slide boundaries.
 
 ## Prerequisites
 

@@ -1,228 +1,389 @@
-const OpenAI = require('openai');
-const { getBlueprint } = require('./layoutRouter');
+const axios = require('axios');
 
-const LAYOUT_SCHEMAS = {
-    "title_hero": '{\n      "slide_number": __SLIDE_NUM__,\n      "slide_type": "title_hero",\n      "slide_category": "...",\n      "title": "...",\n      "subtitle": "..."\n    }',
-    "standard_text": '{\n      "slide_number": __SLIDE_NUM__,\n      "slide_type": "standard_text",\n      "slide_category": "...",\n      "title": "...",\n      "bullets": ["...", "..."]\n    }',
-    "two_column_image": '{\n      "slide_number": __SLIDE_NUM__,\n      "slide_type": "two_column_image",\n      "slide_category": "...",\n      "title": "...",\n      "bullets": ["...", "..."],\n      "image_prompt": "..."\n    }',
-    "bento_grid": '{\n      "slide_number": __SLIDE_NUM__,\n      "slide_type": "bento_grid",\n      "slide_category": "...",\n      "title": "...",\n      "items": [{"size": "large", "title": "...", "desc": "..."}]\n    }',
-    "chart_pie": '{\n      "slide_number": __SLIDE_NUM__,\n      "slide_type": "chart_pie",\n      "slide_category": "...",\n      "title": "...",\n      "chart_data": {"labels": ["A", "B"], "values": [10, 20]}\n    }',
-    "chart_bar": '{\n      "slide_number": __SLIDE_NUM__,\n      "slide_type": "chart_bar",\n      "slide_category": "...",\n      "title": "...",\n      "chart_data": {"labels": ["A", "B"], "values": [10, 20]}\n    }',
-    "data_table": '{\n      "slide_number": __SLIDE_NUM__,\n      "slide_type": "data_table",\n      "slide_category": "...",\n      "title": "...",\n      "table_data": {"headers": ["Col1", "Col2"], "rows": [["Val1", "Val2"]]}\n    }',
-    "comparison": '{\n      "slide_number": __SLIDE_NUM__,\n      "slide_type": "comparison",\n      "slide_category": "...",\n      "title": "...",\n      "column_left": {"title": "...", "bullets": ["..."]}, "column_right": {"title": "...", "bullets": ["..."]}\n    }',
-    "stat_or_quote": '{\n      "slide_number": __SLIDE_NUM__,\n      "slide_type": "stat_or_quote",\n      "slide_category": "...",\n      "title": "...",\n      "huge_text": "...",\n      "subtext": "..."\n    }',
-    "stat_callout": '{\n      "slide_number": __SLIDE_NUM__,\n      "slide_type": "stat_callout",\n      "slide_category": "...",\n      "title": "...",\n      "stat": "...",\n      "label": "...",\n      "bullets": ["..."]\n    }',
-    "timeline": '{\n      "slide_number": __SLIDE_NUM__,\n      "slide_type": "timeline",\n      "slide_category": "...",\n      "title": "...",\n      "steps": [{"step": "...", "text": "..."}]\n    }',
-    "grid_list": '{\n      "slide_number": __SLIDE_NUM__,\n      "slide_type": "grid_list",\n      "slide_category": "...",\n      "title": "...",\n      "items": [{"item_title": "...", "item_text": "..."}]\n    }',
-    "metric_dashboard": '{\n      "slide_number": __SLIDE_NUM__,\n      "slide_type": "metric_dashboard",\n      "slide_category": "...",\n      "title": "...",\n      "metrics": [{"label": "...", "value": "...", "change": "..."}]\n    }',
-    "summary_takeaways": '{\n      "slide_number": __SLIDE_NUM__,\n      "slide_type": "summary_takeaways",\n      "slide_category": "...",\n      "title": "...",\n      "bullets": ["...", "..."]\n    }',
-    "default": '{\n      "slide_number": __SLIDE_NUM__,\n      "slide_type": "default",\n      "slide_category": "...",\n      "title": "...",\n      "subtitle": "...",\n      "bullets": ["..."]\n    }'
+// SCHEMA 1: Used strictly for planning roles, priorities, and key messages.
+const METADATA_SCHEMA = {
+    type: "json_schema",
+    json_schema: {
+        name: "presentation_metadata",
+        strict: true,
+        schema: {
+            type: "object",
+            properties: {
+                slides: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            slide_type: { type: "string" },
+                            role: { type: "string" },
+                            priority: { type: "integer" },
+                            key_message: { type: "string" }
+                        },
+                        required: ["slide_type", "role", "priority", "key_message"],
+                        additionalProperties: false
+                    }
+                }
+            },
+            required: ["slides"],
+            additionalProperties: false
+        }
+    }
 };
 
-let previousLayoutSequence = [];
-
-async function generateJsonSlides(prompt, slideCount, tone, baseUrl, modelName, contextText = "", density = "Detailed", includeImages = false, referenceImage = null, temperature = 0.6) {
-    let finalBaseUrl = baseUrl || 'http://127.0.0.1:1234/v1';
-    if (!finalBaseUrl.endsWith('/v1') && !finalBaseUrl.endsWith('/api')) {
-        finalBaseUrl = finalBaseUrl.replace(/\/$/, '') + '/v1';
-    }
-
-    const openai = new OpenAI({
-        baseURL: finalBaseUrl,
-        apiKey: 'local',
-    });
-
-    const blueprint = getBlueprint(prompt, slideCount, temperature);
-    const blueprintString = JSON.stringify(blueprint);
-
-    const antiRepetitionRule = previousLayoutSequence.length > 0
-        ? `1. DO NOT use the exact following layout sequence: ${JSON.stringify(previousLayoutSequence)}. You must invent a completely different structural narrative.`
-        : ``;
-
-    const slideSchemasArray = blueprint.map((layoutType, index) => {
-        const schemaTemplate = LAYOUT_SCHEMAS[layoutType] || LAYOUT_SCHEMAS["default"];
-        let schemaStr = schemaTemplate.replace('__SLIDE_NUM__', index + 1);
-        if (includeImages) {
-            schemaStr = schemaStr.replace('\n    }', ',\n      "image_search_query": "search query"\n    }');
-        }
-        return schemaStr;
-    });
-    const combinedSchemas = slideSchemasArray.join(',\n    ');
-
-    let systemPrompt = `You are an expert presentation data architect. Your task is to generate a highly engaging PowerPoint outline.
-Tone: ${tone}
-Number of Slides: ${slideCount}
-Content Density: ${density}
-
-You MUST structure your JSON output to perfectly match the following layout sequence: ${blueprintString}.
-Slide 1 MUST be ${blueprint[0]}, Slide 2 MUST be ${blueprint[1]}, etc. Do NOT change this order. Fill the content based on the user's topic.
-
-CRITICAL SYSTEM DIRECTIVES:
-${antiRepetitionRule}
-2. DATA VISUALIZATION MANDATE: You must include at least one bento_grid, chart_pie, or data_table in every presentation.
-3. SLIDE CATEGORY: Every slide MUST include a "slide_category" field. Choose one:
-   - "title_hero": For intros and transitions (Max 20 words total).
-   - "informational": For text-heavy explanations, bullets, and comparisons (Max 60 words total).
-   - "data_viz": For charts, tables, and bento grids (Text must be extremely concise, max 10 words per item).
-
-${includeImages ? '\nCRITICAL INSTRUCTION: You MUST include an "image_search_query" field for EACH slide containing a 5-6 word descriptive query for a stock photo.' : ''}
-${contextText ? `Use the following extracted document context:\n---\n${contextText}\n---\n\n` : ''}You MUST return a JSON object with this EXACT schema, matching the fields to the chosen slide_type:
-{
-  "title": "Main presentation title",
-  "slides": [
-    ${combinedSchemas}
-  ]
-}
-
-DO NOT wrap your response in markdown code blocks. Return ONLY valid, parseable JSON. Ensure all keys and string values are properly double-quoted.`;
-
-    let userMessageContent = prompt;
-    if (referenceImage) {
-        userMessageContent = [
-            { type: "text", text: prompt },
-            { type: "image_url", image_url: { url: referenceImage } }
-        ];
-    }
-
-    let retryCount = 0;
-    let currentPrompt = userMessageContent;
-    
-    while (retryCount <= 2) {
-        const response = await openai.chat.completions.create({
-            model: modelName || 'llama3.2',
-            messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: currentPrompt }
-            ],
-            temperature: 0.7
-        });
-
-        if (!response || !response.choices || !response.choices[0]) {
-            console.error("Raw LLM Response:", response);
-            throw new Error("Invalid response from local LLM. The model may have crashed or returned an empty response.");
-        }
-
-        let content = response.choices[0].message?.content || "";
-        content = content.trim();
-        try {
-            if (content.startsWith('```json')) {
-                content = content.replace(/^```json/, '').replace(/```$/, '').trim();
-            } else if (content.startsWith('```')) {
-                content = content.replace(/^```/, '').replace(/```$/, '').trim();
-            }
-            
-            const parsedData = JSON.parse(content);
-            const generatedSequence = parsedData.slides ? parsedData.slides.map(s => s.slide_type) : [];
-            
-            if (previousLayoutSequence.length > 0 && JSON.stringify(generatedSequence) === JSON.stringify(previousLayoutSequence)) {
-                console.log(`[LLM Validation Loop] Detected mode collapse. Retrying... (${retryCount + 1}/3)`);
-                retryCount++;
-                
-                const errorMessage = "You reused the previous layout sequence. Generate a new JSON with different slide_types.";
-                if (Array.isArray(currentPrompt)) {
-                    currentPrompt.push({ type: "text", text: errorMessage });
-                } else {
-                    currentPrompt += `\n\n${errorMessage}`;
+// SCHEMA 2: Used strictly for writing the actual presentation content.
+// Now explicitly preserves the metadata planned in phase 1.
+const PRESENTATION_SCHEMA = {
+    type: "json_schema",
+    json_schema: {
+        name: "presentation_content",
+        strict: true,
+        schema: {
+            type: "object",
+            properties: {
+                slides: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            slide_type: { type: "string" },
+                            role: { type: "string" },
+                            priority: { type: "integer" },
+                            key_message: { type: "string" },
+                            title: { type: "string" },
+                            subtitle: { type: "string" },
+                            left_content: { type: "string" },
+                            image_description: { type: "string" },
+                            paragraphs: { 
+                                type: "array", 
+                                items: { type: "string" } 
+                            },
+                            cards: {
+                                type: "array",
+                                items: {
+                                    type: "object",
+                                    properties: {
+                                        header: { type: "string" },
+                                        description: { type: "string" }
+                                    },
+                                    required: ["header", "description"],
+                                    additionalProperties: false
+                                }
+                            },
+                            left_box: {
+                                type: "object",
+                                properties: {
+                                    header: { type: "string" },
+                                    points: { type: "array", items: { type: "string" } }
+                                },
+                                required: ["header", "points"],
+                                additionalProperties: false
+                            },
+                            right_box: {
+                                type: "object",
+                                properties: {
+                                    header: { type: "string" },
+                                    points: { type: "array", items: { type: "string" } }
+                                },
+                                required: ["header", "points"],
+                                additionalProperties: false
+                            }
+                        },
+                        required: ["slide_type", "role", "priority", "key_message", "title"],
+                        additionalProperties: false
+                    }
                 }
-                
-                systemPrompt += `\nABSOLUTELY DO NOT USE THIS SEQUENCE: ${JSON.stringify(generatedSequence)}`;
-                continue;
-            }
-            
-            previousLayoutSequence = generatedSequence;
-            if (parsedData && parsedData.slides && Array.isArray(parsedData.slides)) {
-                parsedData.slides = postProcessSlides(parsedData.slides);
-            }
-            return parsedData;
-            
-        } catch (e) {
-            console.error("Error parsing LLM response or retrying:", e);
-            if (retryCount >= 2 || !(e instanceof SyntaxError)) {
-                throw new Error("LLM returned malformed JSON or failed validation: " + e.message);
-            }
-            retryCount++;
-            const errorMessage = "The response was not valid JSON. Please return ONLY a JSON object.";
-            if (Array.isArray(currentPrompt)) {
-                currentPrompt.push({ type: "text", text: errorMessage });
-            } else {
-                currentPrompt += `\n\n${errorMessage}`;
-            }
+            },
+            required: ["slides"],
+            additionalProperties: false
         }
     }
-    throw new Error("Failed to generate a valid, unique presentation after 3 attempts.");
-}
+};
 
-function postProcessSlides(slides) {
-    const types = ["comparison", "timeline", "stat_callout", "grid_list"];
-    for (let i = 1; i < slides.length; i++) {
-        if (slides[i].slide_type === slides[i-1].slide_type && slides[i].slide_type !== 'default') {
-            const availableTypes = types.filter(t => t !== slides[i-1].slide_type);
-            slides[i].slide_type = availableTypes[Math.floor(Math.random() * availableTypes.length)];
+// SCHEMA 3: Single slide generation
+const SINGLE_SLIDE_SCHEMA = {
+    type: "json_schema",
+    json_schema: {
+        name: "single_slide_content",
+        strict: true,
+        schema: {
+            type: "object",
+            properties: {
+                slide_type: { type: "string" },
+                role: { type: "string" },
+                priority: { type: "integer" },
+                key_message: { type: "string" },
+                title: { type: "string" },
+                subtitle: { type: "string" },
+                left_content: { type: "string" },
+                image_description: { type: "string" },
+                paragraphs: { 
+                    type: "array", 
+                    items: { type: "string" } 
+                },
+                cards: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            header: { type: "string" },
+                            description: { type: "string" }
+                        },
+                        required: ["header", "description"],
+                        additionalProperties: false
+                    }
+                },
+                left_box: {
+                    type: "object",
+                    properties: {
+                        header: { type: "string" },
+                        points: { type: "array", items: { type: "string" } }
+                    },
+                    required: ["header", "points"],
+                    additionalProperties: false
+                },
+                right_box: {
+                    type: "object",
+                    properties: {
+                        header: { type: "string" },
+                        points: { type: "array", items: { type: "string" } }
+                    },
+                    required: ["header", "points"],
+                    additionalProperties: false
+                },
+                table_data: {
+                    type: "object",
+                    properties: {
+                        headers: { type: "array", items: { type: "string" } },
+                        rows: { 
+                            type: "array", 
+                            items: { type: "array", items: { type: "string" } } 
+                        }
+                    },
+                    required: ["headers", "rows"],
+                    additionalProperties: false
+                },
+                chart_data: {
+                    type: "object",
+                    properties: {
+                        labels: { type: "array", items: { type: "string" } },
+                        values: { type: "array", items: { type: "number" } }
+                    },
+                    required: ["labels", "values"],
+                    additionalProperties: false
+                }
+            },
+            required: ["slide_type", "role", "priority", "key_message", "title"],
+            additionalProperties: false
         }
     }
+};
+
+// Internal helper for robustly parsing diverse API output formats
+function parseApiResponse(responseData) {
+    let rawOutput;
+    if (responseData.choices && responseData.choices[0]?.message) {
+        rawOutput = responseData.choices[0].message.content;
+    } else if (responseData.message && responseData.message.content) {
+        rawOutput = responseData.message.content; // Ollama native
+    } else if (responseData.response) {
+        rawOutput = responseData.response; // Ollama generate
+    } else if (responseData.slides) {
+        rawOutput = JSON.stringify(responseData); // Already parsed JSON
+    } else {
+        console.error("[LLM API] Unrecognized response format:", JSON.stringify(responseData).substring(0, 200));
+        rawOutput = typeof responseData === 'string' ? responseData : JSON.stringify(responseData);
+    }
+
+    if (typeof rawOutput !== 'string') {
+        rawOutput = JSON.stringify(rawOutput);
+    }
+
+    const objectMatch = rawOutput.match(/\{[\s\S]*\}/);
+    if (!objectMatch) throw new Error("No JSON object found in output");
+
+    let parsedRoot;
+    try {
+        parsedRoot = JSON.parse(objectMatch[0]);
+    } catch (e) {
+        throw new Error(`Output failed JSON.parse: ${e.message}`);
+    }
+
+    const slides = Array.isArray(parsedRoot) ? parsedRoot : parsedRoot.slides;
+    if (!Array.isArray(slides)) {
+        throw new Error("Output has no usable slides array.");
+    }
+
     return slides;
 }
 
-async function generateIncrementalSlide(contextText, userInstruction, baseUrl, modelName) {
-    let finalBaseUrl = baseUrl || 'http://127.0.0.1:1234/v1';
-    if (!finalBaseUrl.endsWith('/v1') && !finalBaseUrl.endsWith('/api')) {
-        finalBaseUrl = finalBaseUrl.replace(/\/$/, '') + '/v1';
+// PASS 1: Plan the presentation structure
+async function planSlideMetadata(userPrompt, slideTypeBlueprint, baseUrl, modelName, temperature, contextText) {
+    let finalPrompt = `Plan the presentation metadata.`;
+    if (contextText && contextText.trim() !== "") {
+        finalPrompt += `\n\nContext Information (Use this to ground the presentation):\n${contextText}`;
     }
 
-    const openai = new OpenAI({
-        baseURL: finalBaseUrl,
-        apiKey: 'local',
-    });
+    const systemPrompt = `You are an expert presentation architect.
+For the presentation about "${userPrompt}", assign each slide in order:
+  - "role": one of [hook, context, core_idea, evidence, comparison, deep_dive, summary, cta]
+  - "priority": 1 (primary), 2 (secondary), or 3 (tertiary)
+  - "key_message": one sentence — the single thing this slide must convey
 
-    const systemPrompt = `You are an assistant extending an existing presentation deck. 
-Review the deck_context array to understand what has already been covered. 
-Generate ONLY ONE new slide object in JSON matching the requested user instruction. 
-Do not repeat the layout type of the previous slide.
-Supported slide_types: comparison, timeline, stat_callout, grid_list, default.
+Planning rules (apply across the WHOLE deck):
+1. Exactly one slide gets role "hook", and it must be priority 1. Prefer assigning this to the first slide if suitable.
+2. Exactly one slide (typically the last) gets role "summary" or "cta".
+3. No two slides may share the same key_message — each must add new ground.
+4. Priority 1 slides should be ~20-30% of the deck. Do not overuse priority 1.
+5. Roles should feel like a narrative arc (hook -> context -> core_idea -> evidence/comparison -> summary/cta).
 
-Return ONLY a single valid JSON object representing the new slide matching the appropriate schema for its slide_type. DO NOT return an array, just the object.
-Example:
-{
-  "slide_number": 5,
-  "slide_type": "comparison",
-  "title": "New Comparison",
-  "column_left": { "title": "A", "bullets": ["1"] },
-  "column_right": { "title": "B", "bullets": ["2"] }
-}`;
+STRICT BLUEPRINT REQUIREMENTS:
+You MUST output exactly ${slideTypeBlueprint.length} slide objects.
+The slide_type for each object MUST sequentially match this EXACT order:
+${JSON.stringify(slideTypeBlueprint)}
+`;
 
-    const prompt = `Context of existing slides:
-${contextText}
-
-User instruction: ${userInstruction}`;
-
-    const response = await openai.chat.completions.create({
-        model: modelName || 'llama3.2',
-        messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: prompt }
-        ],
-        temperature: 0.7
-    });
-
-    if (!response || !response.choices || !response.choices[0]) {
-        throw new Error("Invalid response from local LLM.");
-    }
-
-    let content = response.choices[0].message?.content || "";
-    content = content.trim();
-    try {
-        if (content.startsWith('```json')) {
-            content = content.replace(/^```json/, '').replace(/```$/, '').trim();
-        } else if (content.startsWith('```')) {
-            content = content.replace(/^```/, '').replace(/```$/, '').trim();
+    const response = await axios.post(
+        baseUrl,
+        {
+            model: modelName,
+            messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: finalPrompt }
+            ],
+            temperature: temperature,
+            max_tokens: 800,
+            stream: false,
+            response_format: METADATA_SCHEMA
         }
-        return JSON.parse(content);
-    } catch (e) {
-        throw new Error("LLM returned malformed JSON: " + e.message);
+    );
+
+    const metadataSlides = parseApiResponse(response.data);
+
+    // Validate
+    if (metadataSlides.length !== slideTypeBlueprint.length) {
+        throw new Error(`Planner returned ${metadataSlides.length} slides, expected ${slideTypeBlueprint.length}`);
+    }
+
+    metadataSlides.forEach((slide, idx) => {
+        if (slide.slide_type !== slideTypeBlueprint[idx].slide_type) {
+            throw new Error(`Slide ${idx} slide_type mismatch. Expected ${slideTypeBlueprint[idx].slide_type}, got ${slide.slide_type}`);
+        }
+        if (!slide.role || !slide.priority || !slide.key_message) {
+            throw new Error(`Slide ${idx} is missing role, priority, or key_message.`);
+        }
+    });
+
+    console.log(`[Content Planner] Successfully planned ${metadataSlides.length} slides.`);
+    return metadataSlides;
+}
+
+// PASS 2: Write the content given the plan (SLIDE-BY-SLIDE ITERATION)
+async function writeSlideContent(userPrompt, blueprint, baseUrl, modelName, temperature, contextText) {
+    console.log(`[Content Writer] Beginning iterative generation for ${blueprint.length} slides...`);
+    const finalSlides = [];
+
+    for (let idx = 0; idx < blueprint.length; idx++) {
+        const plan = blueprint[idx];
+        console.log(`[Content Writer] ✍️ Generating slide ${idx + 1}/${blueprint.length} [${plan.slide_type}] using CONTENT MODEL: "${modelName}"...`);
+
+        let finalPrompt = `Write the presentation content for SLIDE ${idx + 1}.`;
+        if (contextText && contextText.trim() !== "") {
+            finalPrompt += `\n\nContext Information (Use this to ground the presentation):\n${contextText}`;
+        }
+        
+        // Provide prior slides as context so it doesn't repeat itself
+        if (finalSlides.length > 0) {
+            const priorTitles = finalSlides.map(s => s.title).join(" | ");
+            finalPrompt += `\n\nPrior Slide Titles Generated So Far: ${priorTitles}`;
+        }
+
+        const systemPrompt = `You are an expert technical presentation writer.
+Generate presentation content for the topic: "${userPrompt}".
+You are writing ONE specific slide (Slide ${idx + 1} out of ${blueprint.length}).
+
+STRICT INSTRUCTIONS:
+You MUST create content that fits the layout: ${plan.slide_type}.
+Please assign an appropriate role (e.g. hook, context, core_idea, evidence, summary), priority (1, 2, or 3), and key_message for this slide based on where it sits in the presentation.
+
+CURRENT SLIDE LAYOUT REQUIREMENT:
+${JSON.stringify(plan, null, 2)}
+
+ROLE WRITING GUIDE:
+- hook: Punchy, provocative framing. 1 bold claim or stat. No hedging.
+- context: Establish the problem plainly. Neutral, factual tone.
+- core_idea: State the thesis with confidence. This is the slide people should remember.
+- evidence: Concrete, specific, numbers/examples over adjectives.
+- comparison: Balanced but decisive — end with a clear takeaway.
+- deep_dive: Technical precision. Assume an informed reader. Denser content is acceptable.
+- summary: Compress, don't repeat verbatim.
+- cta: Clear, actionable next steps.
+
+PRIORITY DEPTH GUIDE:
+- Priority 1: High impact. Fewer words, bigger font. One dominant visual/idea.
+- Priority 2: Supporting arguments. Balanced text and visuals.
+- Priority 3: Reference/Deep context. Denser text is allowed.
+
+SLIDE TYPE INSTRUCTIONS:
+- For 'title_hero' slides: fill 'title' and 'subtitle'.
+- For 'bento_grid' slides: fill 'title' and provide exactly 4 items in the 'cards' array.
+- For 'two_column_image' slides: fill 'title', 'left_content', and 'image_description'.
+- For 'comparison' slides: fill 'title', 'left_box', and 'right_box'.
+- For 'standard_text' slides: fill 'title' and 'paragraphs'.`;
+
+        const response = await axios.post(
+            baseUrl,
+            {
+                model: modelName,
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: finalPrompt }
+                ],
+                temperature: temperature,
+                max_tokens: 1024,
+                stream: false,
+                response_format: SINGLE_SLIDE_SCHEMA
+            }
+        );
+
+        let rawOutput;
+        if (response.data.choices && response.data.choices[0]?.message) {
+            rawOutput = response.data.choices[0].message.content;
+        } else {
+            rawOutput = JSON.stringify(response.data);
+        }
+
+        const objectMatch = rawOutput.match(/\{[\s\S]*\}/);
+        if (!objectMatch) throw new Error("No JSON object found in output");
+        
+        let slide = JSON.parse(objectMatch[0]);
+
+        // Enforce the layout type
+        slide.slide_type = plan.slide_type;
+        finalSlides.push(slide);
+    }
+
+    console.log(`[Content Writer] Successfully wrote ${finalSlides.length} slides iteratively.`);
+    return finalSlides;
+}
+
+// ORCHESTRATOR
+async function generateSlideContent(userPrompt, blueprint, baseUrl = null, modelName = null, temperature = 0.6, contextText = "") {
+    try {
+        const finalBaseUrl = baseUrl || process.env.CONTENT_MODEL_URL || 'http://127.0.0.1:1234/v1/chat/completions';
+        const formattedBaseUrl = (finalBaseUrl.endsWith('/v1') || finalBaseUrl.endsWith('/api')) 
+            ? finalBaseUrl.replace(/\/$/, '') + '/chat/completions' 
+            : finalBaseUrl;
+        const finalModelName = modelName || process.env.CONTENT_MODEL_NAME || 'gemma-4-e4b';
+
+        console.log(`[Content Pipeline] Starting 1-pass iterative generation with ${finalModelName} at ${formattedBaseUrl}...`);
+
+        const finalSlides = await writeSlideContent(userPrompt, blueprint, formattedBaseUrl, finalModelName, temperature, contextText);
+
+        return finalSlides;
+    } catch (error) {
+        console.error(`[Content Pipeline Error] Failed to generate slide content:`, error.message);
+        throw error;
     }
 }
 
-module.exports = {
-    generateJsonSlides,
-    generateIncrementalSlide
-};
+module.exports = { generateSlideContent, planSlideMetadata, writeSlideContent };

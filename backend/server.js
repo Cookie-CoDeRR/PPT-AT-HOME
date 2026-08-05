@@ -1,11 +1,12 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { generateJsonSlides } = require('./services/llmService');
+const { generateSlideContent } = require('./services/llmService');
 const { generatePptx } = require('./services/pptService');
 const OpenAI = require('openai');
 const multer = require('multer');
 const { google } = require('googleapis');
-const { processAndStoreDocument, searchContext } = require('./services/ragService');
+const { processAndStoreDocument, searchContext, searchWeb } = require('./services/ragService');
 const db = require('./database/db');
 const axios = require('axios');
 
@@ -14,8 +15,14 @@ const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+const path = require('path');
+
 app.use(cors());
 app.use(express.json());
+app.use('/assets', express.static(path.join(__dirname, 'public', 'assets')));
+
+// Import preview service
+const { generatePreview } = require('./services/previewService');
 
 // Test Connection Endpoint
 // Models list Endpoint
@@ -133,29 +140,41 @@ app.post('/api/upload-context', upload.single('file'), async (req, res) => {
 // Generate JSON Slides Endpoint
 app.post('/api/generate-json', async (req, res) => {
     try {
-        const { prompt, slideCount, tone, baseUrl, model, useRag, theme, density, includeImages, referenceImage, temperature } = req.body;
+        const { prompt, slideCount, tone, baseUrl, model, useRag, useWebRag, theme, density, includeImages, referenceImage, temperature, contentType, language, slideSize, graphicStyle, graphicCount, graphicQuality } = req.body;
         
-        if (!prompt || !slideCount || !tone) {
+        if (!prompt || !tone) {
             return res.status(400).json({ error: "Missing required parameters" });
         }
 
+        // Run document RAG and web RAG concurrently (Web RAG is default now)
         let contextText = "";
-        if (useRag) {
-            contextText = await searchContext(prompt, baseUrl, 3);
+        const [docContext, webContext] = await Promise.all([
+            useRag ? searchContext(prompt, baseUrl, 3) : Promise.resolve(""),
+            searchWeb(prompt) // Always fetch real-time news/context
+        ]);
+
+        // Merge: document context first (authoritative), then web context
+        if (docContext) contextText += docContext;
+        if (webContext) {
+            contextText += (contextText ? '\n\n--- Web Search Context ---\n\n' : '') + webContext;
         }
 
-        const slidesJson = await generateJsonSlides(
+        // Get blueprint from fine-tuned Router
+        const { getDetailedBlueprint } = require('./services/blueprintService');
+        const blueprintSequence = await getDetailedBlueprint(prompt, slideCount || 1);
+
+        const { logGeneration } = require('./services/logger');
+        logGeneration(prompt, webContext, blueprintSequence);
+
+        const slidesArray = await generateSlideContent(
             prompt, 
-            slideCount, 
-            tone, 
-            baseUrl, 
-            model, 
-            contextText, 
-            density || "Detailed", 
-            includeImages || false,
-            referenceImage,
-            temperature || 0.6
+            blueprintSequence,
+            baseUrl,
+            model,
+            temperature || 0.6,
+            contextText
         );
+        const slidesJson = { title: prompt, slides: slidesArray };
         
         const presTheme = theme || "Modern Minimalist";
         const dbId = db.savePresentation(slidesJson.title || "Untitled Presentation", slidesJson, presTheme);
@@ -174,7 +193,7 @@ app.post('/api/generate-json', async (req, res) => {
 // Generate Incremental Slide Endpoint
 app.post('/api/generate-incremental', async (req, res) => {
     try {
-        const { contextText, instruction, baseUrl, model } = req.body;
+        const { contextText, instruction, baseUrl, model, contentType } = req.body;
         
         if (!contextText || !instruction) {
             return res.status(400).json({ error: "Missing context or instruction" });
@@ -186,7 +205,8 @@ app.post('/api/generate-incremental', async (req, res) => {
             contextText,
             instruction,
             baseUrl,
-            model
+            model,
+            contentType || 'presentation'
         );
         
         res.json({ slide: newSlide });
@@ -194,6 +214,77 @@ app.post('/api/generate-incremental', async (req, res) => {
         console.error("Error generating incremental slide:", error);
         res.status(500).json({ error: error.message });
     }
+});
+
+// Master Architecture Endpoint
+app.post('/api/generate-presentation', async (req, res) => {
+    try {
+        const { prompt, slide_count, temperature, theme_id, baseUrl, model } = req.body;
+        
+        const { THEMES } = require('./shared/themeEngine');
+        const theme = THEMES[theme_id] || THEMES.dark_glass;
+
+        // Step 1: Get Structural Blueprint from Fine-Tuned 1.5B Router
+        const { getDetailedBlueprint } = require('./services/blueprintService');
+        const blueprintSequence = await getDetailedBlueprint(prompt, slide_count || 5);
+
+        // Fetch Web RAG Context automatically (Default behavior)
+        const { searchWeb } = require('./services/ragService');
+        const webContext = await searchWeb(prompt);
+
+        // Step 2: LLM Call with Retry & Sanitizer
+        const { logGeneration } = require('./services/logger');
+        logGeneration(prompt, webContext, blueprintSequence);
+
+        const { generateSlideContent } = require('./services/llmService');
+        const rawLLMOutput = await generateSlideContent(prompt, blueprintSequence, baseUrl, model, temperature, webContext);
+        
+        const { validateAndHeal } = require('./services/jsonHealer');
+        const validatedSlidesJson = await validateAndHeal(rawLLMOutput, baseUrl, model);
+        const validatedSlides = validatedSlidesJson.slides;
+
+        // Step 3: DSL Interpretation
+        const { parseSlideToDSL } = require('./shared/layoutInterpreter');
+        const dslPresentation = validatedSlides.map(slide => 
+            parseSlideToDSL(slide)
+        );
+
+        // Step 4: Export Native PPTX via PptxGenJS
+        const { generatePPTX } = require('./services/pptxExporter');
+        const path = require('path');
+        const fileName = `deck_${Date.now()}.pptx`;
+        const exportPath = path.join(__dirname, 'public', 'exports', fileName);
+        
+        await generatePPTX(dslPresentation, theme, exportPath);
+
+        // Save to DB so history works (using legacy format for compatibility if needed)
+        const dbId = db.savePresentation(validatedSlidesJson.title || "Untitled Presentation", validatedSlidesJson, theme.name);
+
+        // Step 5: Respond to Client
+        res.json({
+            success: true,
+            id: dbId,
+            downloadUrl: `/exports/${fileName}`,
+            slides: validatedSlides,
+            dslTree: dslPresentation,
+            themeUsed: theme
+        });
+
+    } catch (error) {
+        console.error("Pipeline Failure:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Image Style Options Endpoint
+app.get('/api/image-styles', (req, res) => {
+    const { IMAGE_STYLE_PRESETS } = require('./services/pptService');
+    const styles = Object.keys(IMAGE_STYLE_PRESETS).map(key => ({
+        id: key,
+        label: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        preview: IMAGE_STYLE_PRESETS[key].replace(/^, /, '').split(',')[0]
+    }));
+    res.json({ styles });
 });
 
 // Generate PPTX Endpoint
@@ -206,7 +297,7 @@ app.post('/api/generate-pptx', upload.single('template'), async (req, res) => {
             slides = req.body.slides;
         }
         
-        const { title, theme, templateType, slideSize, cloudTemplateUrl, customTheme, customBackground } = req.body;
+        const { title, theme, templateType, slideSize, cloudTemplateUrl, customTheme, customBackground, imageStyle } = req.body;
         
         let customThemeObj = null;
         if (customTheme) {
@@ -257,9 +348,25 @@ app.post('/api/generate-pptx', upload.single('template'), async (req, res) => {
                 if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
             }
         } else {
-            // Default pptxgenjs engine
-            const { generatePptx } = require('./services/pptService');
-            pptxBuffer = await generatePptx(slides, title, theme, slideSize, customThemeObj, customBgObj);
+            // New JS Exporter (PptxGenJS via DSL)
+            const { parseSlideToDSL } = require('./shared/layoutInterpreter');
+            const { THEMES } = require('./shared/themeEngine');
+            const { generatePPTXBuffer } = require('./services/pptxExporter');
+            
+            // Reconstruct the theme (handle Custom theme)
+            let resolvedTheme = THEMES[theme] || THEMES.dark_glass;
+            if (theme === 'Custom' && customThemeObj) {
+                resolvedTheme = { ...resolvedTheme, ...customThemeObj };
+            }
+            if (customBgObj && customBgObj.value) {
+                resolvedTheme.bg = customBgObj.value.replace('#', '');
+            }
+
+            // Map slides to DSL
+            const dslPresentation = slides.map(slide => parseSlideToDSL(slide));
+
+            // Generate buffer
+            pptxBuffer = await generatePPTXBuffer(dslPresentation, resolvedTheme);
         }
         
         res.setHeader('Content-Disposition', 'attachment; filename=presentation.pptx');
@@ -288,33 +395,46 @@ app.post('/api/export/drive', upload.single('template'), async (req, res) => {
             throw new Error("Google Drive OAuth is not configured. Please see backend/server.js to add your API credentials.");
         }
 
-        const { slides, title, theme, templateType, slideSize, cloudTemplateUrl, customTheme, customBackground } = req.body;
-        const slidesJson = JSON.parse(slides);
+        const { slides, title, theme, templateType, slideSize, cloudTemplateUrl, customTheme, customBackground, imageStyle } = req.body;
+        let slidesJson;
+        try {
+            slidesJson = typeof slides === 'string' ? JSON.parse(slides) : slides;
+        } catch (e) {
+            return res.status(400).json({ error: "Invalid slides data" });
+        }
         
         let customThemeObj = null;
         if (customTheme) {
-            try { customThemeObj = JSON.parse(customTheme); } catch(e){}
+            try { customThemeObj = typeof customTheme === 'string' ? JSON.parse(customTheme) : customTheme; } catch(e){}
         }
         
         let customBgObj = null;
         if (customBackground) {
-            try { customBgObj = JSON.parse(customBackground); } catch(e){}
+            try { customBgObj = typeof customBackground === 'string' ? JSON.parse(customBackground) : customBackground; } catch(e){}
         }
         
         let pptxBuffer;
         if (templateType === 'custom' && req.file) {
             const fs = require('fs');
             const path = require('path');
-            const templatePath = path.join(__dirname, 'temp', req.file.originalname);
-            fs.writeFileSync(templatePath, req.file.buffer);
-            const { generateFromTemplate } = require('./services/pptService');
-            pptxBuffer = await generateFromTemplate(slidesJson, title, templatePath);
-            fs.unlinkSync(templatePath);
+            const tempDir = path.join(__dirname, 'temp');
+            if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+            
+            const safeFilename = path.basename(req.file.originalname);
+            const templatePath = path.join(tempDir, `custom_template_${Date.now()}_${safeFilename}`);
+            
+            try {
+                fs.writeFileSync(templatePath, req.file.buffer);
+                const { generateFromTemplate } = require('./services/pptService');
+                pptxBuffer = await generateFromTemplate(slidesJson, title, templatePath);
+            } finally {
+                if (fs.existsSync(templatePath)) fs.unlinkSync(templatePath);
+            }
         } else if (templateType === 'online' && cloudTemplateUrl) {
             const fs = require('fs');
             const path = require('path');
             const tempDir = path.join(__dirname, 'temp');
-            if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+            if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
             
             const tempFilePath = path.join(tempDir, `cloud_template_${Date.now()}.pptx`);
             
@@ -327,8 +447,25 @@ app.post('/api/export/drive', upload.single('template'), async (req, res) => {
                 if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
             }
         } else {
-            const { generatePptx } = require('./services/pptService');
-            pptxBuffer = await generatePptx(slidesJson, title, theme, slideSize, customThemeObj, customBgObj);
+            // New JS Exporter (PptxGenJS via DSL)
+            const { parseSlideToDSL } = require('./shared/layoutInterpreter');
+            const { THEMES } = require('./shared/themeEngine');
+            const { generatePPTXBuffer } = require('./services/pptxExporter');
+            
+            // Reconstruct the theme (handle Custom theme)
+            let resolvedTheme = THEMES[theme] || THEMES.dark_glass;
+            if (theme === 'Custom' && customThemeObj) {
+                resolvedTheme = { ...resolvedTheme, ...customThemeObj };
+            }
+            if (customBgObj && customBgObj.value) {
+                resolvedTheme.bg = customBgObj.value.replace('#', '');
+            }
+
+            // Map slides to DSL
+            const dslPresentation = slidesJson.map(slide => parseSlideToDSL(slide));
+
+            // Generate buffer
+            pptxBuffer = await generatePPTXBuffer(dslPresentation, resolvedTheme);
         }
 
         const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
@@ -343,7 +480,7 @@ app.post('/api/export/drive', upload.single('template'), async (req, res) => {
         };
         
         const driveRes = await drive.files.create({
-            resource: fileMetadata,
+            requestBody: fileMetadata,
             media: media,
             fields: 'id'
         });
@@ -351,6 +488,51 @@ app.post('/api/export/drive', upload.single('template'), async (req, res) => {
         res.json({ success: true, driveFileId: driveRes.data.id });
     } catch (error) {
         console.error("Error exporting to Drive:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// --- Preview Endpoints ---
+app.post('/api/preview', async (req, res) => {
+    try {
+        const result = await generatePreview(req.body);
+        res.json(result);
+    } catch (error) {
+        console.error("Error generating preview:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/preview/:hash/:slideIndex', (req, res) => {
+    try {
+        const { hash, slideIndex } = req.params;
+        const fs = require('fs');
+        const path = require('path');
+        const previewDir = path.join(__dirname, 'temp', 'previews', hash);
+        
+        if (!fs.existsSync(previewDir)) {
+            return res.status(404).json({ error: "Preview not found" });
+        }
+        
+        // Find png starting with preview and ending with .png
+        const files = fs.readdirSync(previewDir);
+        const pngFiles = files
+            .filter(f => f.startsWith('preview') && f.endsWith('.png'))
+            .sort((a, b) => {
+                const numA = parseInt(a.replace(/\\D/g, '') || '0', 10);
+                const numB = parseInt(b.replace(/\\D/g, '') || '0', 10);
+                return numA - numB;
+            });
+            
+        const targetFile = pngFiles[parseInt(slideIndex, 10)];
+        if (!targetFile) {
+            return res.status(404).json({ error: "Slide preview not found" });
+        }
+        
+        res.setHeader('Content-Type', 'image/png');
+        res.sendFile(path.join(previewDir, targetFile));
+    } catch (error) {
+        console.error("Error serving preview slide:", error);
         res.status(500).json({ error: error.message });
     }
 });

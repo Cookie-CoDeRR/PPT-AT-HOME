@@ -128,7 +128,7 @@ export default function Workspace({ slides, setSlides, title, theme, setTheme, o
               {/* Slide Card Content */}
               <div 
                 id={`slide-${index}`} 
-                className="relative overflow-hidden flex items-center justify-center p-0 rounded-2xl shadow-2xl border transition-colors group-hover:shadow-violet-500/20"
+                className="relative overflow-hidden flex items-center justify-center p-0 rounded-2xl shadow-2xl border transition-colors group-hover:shadow-violet-500/20 w-full aspect-video"
                 style={{ 
                   ...(customBackground?.type === 'solid' && customBackground.value ? { backgroundColor: customBackground.value } : {}),
                   ...(customBackground?.type === 'gradient' && customBackground.value ? { backgroundImage: customBackground.value, backgroundColor: 'transparent' } : {}),
