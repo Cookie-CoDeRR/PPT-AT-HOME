@@ -98,7 +98,7 @@ function DocCard({ item, darkMode }) {
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 export default function HomePage({ onCreateNew, onSelectMode, onShowHistory, darkMode }) {
-  const [activeNav,    setActiveNav]    = useState('media');
+  const [activeNav,    setActiveNav]    = useState('home');
   const [activeFilter, setActiveFilter] = useState('all');
   const [viewMode,     setViewMode]     = useState('grid');   // 'grid' | 'list'
   const [searchQuery,  setSearchQuery]  = useState('');

@@ -171,24 +171,32 @@ function App() {
   };
 
   return (
-    <div className={`min-h-screen text-gray-100 selection:bg-violet-500/30 transition-colors duration-300 ${
+    <div className={`min-h-screen selection:bg-violet-500/30 transition-colors duration-300 ${
       darkMode
-        ? 'bg-[#0B0F17]'
-        : 'bg-gradient-to-b from-[#eef0fb] via-[#e4e7f8] to-[#d8dcf4]'
+        ? 'bg-[#0B0F17] text-gray-100'
+        : 'bg-gradient-to-b from-[#f8fafc] via-[#f1f5f9] to-[#e2e8f0] text-gray-900'
     }`}>
-      {showHistory && <HistoryPanel onSelectHistory={handleSelectHistory} onClose={() => setShowHistory(false)} />}
+      {showHistory && (
+        <HistoryPanel
+          darkMode={darkMode}
+          onSelectHistory={handleSelectHistory}
+          onClose={() => setShowHistory(false)}
+        />
+      )}
       
       {showSettings && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-[#131B2A] rounded-2xl w-full max-w-md border border-white/10 shadow-2xl relative overflow-hidden">
-            <div className="flex justify-between items-center p-4 border-b border-white/10">
+          <div className={`rounded-2xl w-full max-w-md border shadow-2xl relative overflow-hidden ${
+            darkMode ? 'bg-[#131B2A] border-white/10 text-white' : 'bg-white border-gray-200 text-gray-900'
+          }`}>
+            <div className={`flex justify-between items-center p-4 border-b ${darkMode ? 'border-white/10' : 'border-gray-200'}`}>
               <h3 className="font-bold text-lg flex items-center gap-2"><Settings className="w-5 h-5 text-violet-400" /> Settings</h3>
-              <button onClick={() => setShowSettings(false)} className="text-gray-400 hover:text-white">✕</button>
+              <button onClick={() => setShowSettings(false)} className={darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'}>✕</button>
             </div>
             <div className="p-4">
-              <SettingsPanel settings={settings} onSettingsChange={setSettings} />
+              <SettingsPanel settings={settings} onSettingsChange={setSettings} darkMode={darkMode} />
             </div>
-            <div className="p-4 bg-white/5 border-t border-white/10 flex justify-end">
+            <div className={`p-4 border-t flex justify-end ${darkMode ? 'bg-white/5 border-white/10' : 'bg-gray-50 border-gray-200'}`}>
               <button onClick={() => setShowSettings(false)} className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white font-bold rounded-lg transition-colors">Done</button>
             </div>
           </div>
@@ -257,16 +265,9 @@ function App() {
         )}
 
         {view === 'create-new' && (
-            <CreateNewPage
-              onSelectMode={handleSelectMode}
-              onShowHistory={() => setShowHistory(true)}
-              onBack={() => setView('home')}
-            />
-        )}
-
-        {view === 'create-new' && (
             <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col items-center">
               <CreateNewPage
+                darkMode={darkMode}
                 onSelectMode={handleSelectMode}
                 onShowHistory={() => setShowHistory(true)}
                 onBack={() => setView('home')}
@@ -278,22 +279,24 @@ function App() {
             <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col items-center">
               {view === 'create' && (
                   <CreationLauncher
+                    darkMode={darkMode}
                     onGenerate={handleGenerateJson}
                     isGenerating={isGenerating}
                     baseUrl={settings.baseUrl}
-                    onBack={() => setView('home')}
+                    onBack={() => setView('create-new')}
                   />
               )}
               {view === 'paste' && (
                   <PasteTextLauncher
+                    darkMode={darkMode}
                     onGenerate={handleGenerateJson}
                     isGenerating={isGenerating}
-                    onBack={() => setView('home')}
+                    onBack={() => setView('create-new')}
                   />
               )}
               {view === 'template-pick' && (
                   <TemplatePicker
-                    onBack={() => setView('home')}
+                    onBack={() => setView('create-new')}
                     darkMode={darkMode}
                     onSelectTemplate={(template) => {
                       handleGenerateJson({
@@ -314,7 +317,7 @@ function App() {
               {view === 'import' && (
                   <ImportLauncher
                     darkMode={darkMode}
-                    onBack={() => setView('home')}
+                    onBack={() => setView('create-new')}
                     onPasteInText={() => setView('paste')}
                     onImport={(importData) => {
                       handleGenerateJson({
@@ -337,6 +340,7 @@ function App() {
               )}
               {view === 'wizard' && (
                   <WizardForm
+                    darkMode={darkMode}
                     onGenerate={handleGenerateJson}
                     isGenerating={isGenerating}
                     baseUrl={settings.baseUrl}
@@ -347,6 +351,7 @@ function App() {
 
         {view === 'workspace' && slidesJson && (
             <Workspace
+              darkMode={darkMode}
               slides={slidesJson}
               setSlides={setSlidesJson}
               title={title}

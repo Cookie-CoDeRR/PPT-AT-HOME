@@ -67,8 +67,25 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
 };
 
-export default function CreateNewPage({ onSelectMode, onShowHistory }) {
+export default function CreateNewPage({ onSelectMode, onShowHistory, darkMode = true }) {
   const [hoveredCard, setHoveredCard] = useState(null);
+
+  // Theme tokens
+  const titleGradient = darkMode
+    ? 'from-white via-gray-100 to-gray-400'
+    : 'from-gray-900 via-gray-800 to-gray-600';
+  const subtitleColor = darkMode ? 'text-gray-400' : 'text-gray-600';
+  const cardBg = darkMode
+    ? 'bg-white/5 border-white/10 text-white'
+    : 'bg-white border-gray-200/80 shadow-md text-gray-900 hover:border-violet-300 hover:shadow-lg';
+  const cardTitleColor = darkMode ? 'text-white' : 'text-gray-900';
+  const cardDescColor = darkMode ? 'text-gray-400' : 'text-gray-600';
+  const dividerColor = darkMode ? 'bg-white/5' : 'bg-gray-300';
+  const recentBg = darkMode
+    ? 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/8 hover:text-white'
+    : 'bg-white border-gray-200 shadow-md text-gray-800 hover:border-violet-300 hover:bg-gray-50';
+  const recentPromptTitle = darkMode ? 'text-gray-300 group-hover:text-white' : 'text-gray-800 group-hover:text-gray-900';
+  const recentPromptDesc = darkMode ? 'text-gray-500' : 'text-gray-500';
 
   return (
     <div className="flex flex-col items-center justify-start min-h-full w-full max-w-5xl mx-auto px-6 pt-16 pb-12">
@@ -79,14 +96,16 @@ export default function CreateNewPage({ onSelectMode, onShowHistory }) {
         transition={{ duration: 0.5 }}
         className="text-center mb-14"
       >
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-400 text-xs font-semibold uppercase tracking-widest mb-5">
+        <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-widest mb-5 ${
+          darkMode ? 'bg-violet-500/10 border border-violet-500/20 text-violet-400' : 'bg-violet-600/10 border border-violet-600/20 text-violet-700'
+        }`}>
           <Zap className="w-3 h-3" />
           Local AI • No Cloud Required
         </div>
-        <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight bg-gradient-to-br from-white via-gray-100 to-gray-400 bg-clip-text text-transparent leading-tight mb-4">
+        <h1 className={`text-5xl md:text-6xl font-extrabold tracking-tight bg-gradient-to-br ${titleGradient} bg-clip-text text-transparent leading-tight mb-4`}>
           Create with AI
         </h1>
-        <p className="text-gray-400 text-lg max-w-xl mx-auto">
+        <p className={`text-lg max-w-xl mx-auto ${subtitleColor}`}>
           Turn your ideas into stunning presentations powered entirely by your local LLM — fully private, zero internet required.
         </p>
       </motion.div>
@@ -109,7 +128,7 @@ export default function CreateNewPage({ onSelectMode, onShowHistory }) {
               whileHover={{ y: -4, scale: 1.02 }}
               whileTap={{ scale: 0.97 }}
               onClick={() => onSelectMode(mode.id)}
-              className={`relative flex flex-col items-start gap-3 p-5 rounded-2xl bg-white/5 border border-white/10 ${mode.borderHover} transition-all duration-200 text-left group cursor-pointer overflow-hidden`}
+              className={`relative flex flex-col items-start gap-3 p-5 rounded-2xl border ${cardBg} ${mode.borderHover} transition-all duration-200 text-left group cursor-pointer overflow-hidden`}
             >
               {/* Glow overlay on hover */}
               <div
@@ -117,14 +136,14 @@ export default function CreateNewPage({ onSelectMode, onShowHistory }) {
               />
 
               {/* Icon */}
-              <div className={`relative z-10 w-12 h-12 rounded-xl bg-gradient-to-br ${mode.iconBg} border border-white/10 flex items-center justify-center`}>
+              <div className={`relative z-10 w-12 h-12 rounded-xl bg-gradient-to-br ${mode.iconBg} border ${darkMode ? 'border-white/10' : 'border-black/5'} flex items-center justify-center`}>
                 <Icon className={`w-5 h-5 ${mode.iconColor}`} />
               </div>
 
               {/* Text */}
               <div className="relative z-10 flex-1">
-                <h3 className="font-bold text-white text-sm leading-snug mb-1">{mode.title}</h3>
-                <p className="text-xs text-gray-400 leading-relaxed">{mode.description}</p>
+                <h3 className={`font-bold text-sm leading-snug mb-1 ${cardTitleColor}`}>{mode.title}</h3>
+                <p className={`text-xs leading-relaxed ${cardDescColor}`}>{mode.description}</p>
               </div>
 
               {/* Badge */}
@@ -155,9 +174,9 @@ export default function CreateNewPage({ onSelectMode, onShowHistory }) {
         transition={{ delay: 0.5 }}
         className="flex items-center gap-4 w-full mb-10"
       >
-        <div className="flex-1 h-px bg-white/5" />
-        <span className="text-xs text-gray-500 whitespace-nowrap">Or try something new</span>
-        <div className="flex-1 h-px bg-white/5" />
+        <div className={`flex-1 h-px ${dividerColor}`} />
+        <span className={`text-xs whitespace-nowrap ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>Or try something new</span>
+        <div className={`flex-1 h-px ${dividerColor}`} />
       </motion.div>
 
       {/* Recent presentations prompt */}
@@ -168,10 +187,10 @@ export default function CreateNewPage({ onSelectMode, onShowHistory }) {
         className="w-full"
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest">Recent</h2>
+          <h2 className={`text-sm font-bold uppercase tracking-widest ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Recent</h2>
           <button
             onClick={onShowHistory}
-            className="flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 transition-colors font-medium"
+            className="flex items-center gap-1.5 text-xs text-violet-500 hover:text-violet-400 transition-colors font-medium"
           >
             View all <ArrowRight className="w-3 h-3" />
           </button>
@@ -181,20 +200,20 @@ export default function CreateNewPage({ onSelectMode, onShowHistory }) {
           whileHover={{ y: -2 }}
           whileTap={{ scale: 0.98 }}
           onClick={onShowHistory}
-          className="w-full flex items-center gap-4 p-5 rounded-2xl bg-white/5 border border-white/10 hover:border-violet-500/30 hover:bg-white/8 text-left transition-all duration-200 group"
+          className={`w-full flex items-center gap-4 p-5 rounded-2xl border text-left transition-all duration-200 group ${recentBg}`}
         >
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600/30 to-fuchsia-600/30 border border-white/10 flex items-center justify-center flex-shrink-0">
             <Presentation className="w-5 h-5 text-violet-400" />
           </div>
           <div className="flex-1">
-            <p className="text-sm font-semibold text-gray-300 group-hover:text-white transition-colors">
+            <p className={`text-sm font-semibold transition-colors ${recentPromptTitle}`}>
               Open your presentation history
             </p>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <p className={`text-xs mt-0.5 ${recentPromptDesc}`}>
               All your previously generated decks are saved locally and ready to reload or export.
             </p>
           </div>
-          <ArrowRight className="w-4 h-4 text-gray-600 group-hover:text-violet-400 transition-colors flex-shrink-0" />
+          <ArrowRight className="w-4 h-4 text-gray-500 group-hover:text-violet-500 transition-colors flex-shrink-0" />
         </motion.button>
       </motion.div>
     </div>
