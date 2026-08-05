@@ -7,15 +7,15 @@
 ## Summary of New Frontend Pages
 
 > [!IMPORTANT]
-> **`TemplatePicker.jsx` is now the default start/greeting page** — the first screen users see when the app loads (`view` starts as `'template-pick'` in `App.jsx`). It currently uses **static hardcoded data** and needs a real `GET /api/templates` endpoint to be wired up.
+> **`ImportLauncher.jsx` is now the default start/greeting page** — the first screen users see when the app loads (`view` starts as `'import'` in `App.jsx`). It shows three cards: Upload a file, Import from Drive, Import from URL.
 
 | Page | Component | Route Trigger | Status |
 |------|-----------|--------------|--------|
-| **Choose a template** ⭐ (Start Page) | `TemplatePicker.jsx` | **App default view** | 🆕 New — now the greeting page |
+| **Import with AI** ⭐ (Start Page) | `ImportLauncher.jsx` | **App default view** | 🆕 New — now the greeting page |
+| **Choose a template** | `TemplatePicker.jsx` | Home → "Create from template" | 🆕 New |
 | **Paste in Text** | `PasteTextLauncher.jsx` | Home → "Paste in text" | ✅ Existing |
 | Generate (AI prompt) | `CreationLauncher.jsx` | Home → "Generate" | ✅ Existing, extended |
 | Home | `HomePage.jsx` | Logo click / Back buttons | ✅ Existing |
-| Create from Template (Wizard) | `WizardForm.jsx` | Home → "Create from template" | ✅ Existing |
 | Workspace | `Workspace.jsx` | After generation | ✅ Existing |
 
 ---
@@ -174,8 +174,127 @@ The frontend calls `POST /api/generate-json` with:
 The backend should use `templateId` to optionally look up a pre-defined slide structure or system prompt for that template.
 
 ### Priority Order for Backend:
-1. 🔴 Create `GET /api/templates` returning the JSON array above
-2. 🔴 Implement `pasteMode` switching in `llmService.js`
-3. 🟡 Accept `templateId` in `POST /api/generate-json` and use it to load a template-specific prompt
-4. 🟡 Add `graphic` content type routing to an image generation service
-5. ⬜ Adjust LLM prompts for `webpage`, `document`, `social`
+1. 🔴 `POST /api/import/file` — file upload + text extraction
+2. 🔴 `POST /api/import/url` — URL scraping + text extraction
+3. 🔴 Create `GET /api/templates` returning the JSON array above
+4. 🔴 Implement `pasteMode` switching in `llmService.js`
+5. 🟡 `GET /api/import/drive` — Google Drive OAuth + Docs export
+6. 🟡 Accept `templateId` in `POST /api/generate-json` for template-specific prompts
+7. 🟡 Add `graphic` content type routing to an image generation service
+8. ⬜ Adjust LLM prompts for `webpage`, `document`, `social`
+
+---
+
+## 6. NEW: Import with AI — `ImportLauncher.jsx` (Default Start Page)
+
+The app now opens on the **"Import with AI"** page. Users see three cards:
+
+### Card 1 — Upload a file
+
+**Accepted file types:** `.pdf`, `.doc`, `.docx`, `.pptx`, `.txt`
+
+```
+POST /api/import/file
+Content-Type: multipart/form-data
+
+Fields:
+  file        (File)    — the uploaded document
+```
+
+**Expected response:**
+```json
+{
+  "extractedText": "Full text content of the file...",
+  "fileName": "report.pdf",
+  "fileType": "pdf",
+  "wordCount": 2340
+}
+```
+
+After extraction, the frontend calls `POST /api/generate-json` with:
+```json
+{
+  "prompt": "Transform the uploaded file into a presentation",
+  "contentType": "presentation",
+  "importType": "file",
+  "importUrl": null,
+  "slideCount": 10,
+  "tone": "Professional/Corporate",
+  "theme": "Modern Minimalist",
+  "templateType": "default",
+  "density": "Detailed",
+  "includeImages": true
+}
+```
+
+---
+
+### Card 2 — Import from Drive
+
+Currently opens `https://drive.google.com` in a new tab. Backend needs:
+
+```
+GET /api/import/drive
+```
+
+This endpoint should initiate OAuth flow and return a list of Google Docs the user can select. This can be deferred — the UI currently opens drive.google.com as a placeholder.
+
+---
+
+### Card 3 — Import from URL
+
+User pastes a URL in a modal. Frontend sends:
+
+```
+POST /api/import/url
+Content-Type: application/json
+
+{
+  "url": "https://example.com/blog-post"
+}
+```
+
+**Expected response:**
+```json
+{
+  "extractedText": "Full scraped text content...",
+  "title": "Page Title",
+  "sourceUrl": "https://example.com/blog-post",
+  "wordCount": 1820
+}
+```
+
+After extraction, the frontend calls `POST /api/generate-json` with:
+```json
+{
+  "prompt": "Transform the content at https://example.com/blog-post into a presentation",
+  "contentType": "presentation",
+  "importType": "url",
+  "importUrl": "https://example.com/blog-post",
+  "slideCount": 10,
+  "tone": "Professional/Corporate",
+  "theme": "Modern Minimalist",
+  "templateType": "default",
+  "density": "Detailed",
+  "includeImages": true
+}
+```
+
+---
+
+### Supported Import Types in `POST /api/generate-json`
+
+The `importType` field now accepted by the backend:
+
+| `importType` | Meaning | Backend action |
+|---|---|---|
+| `"file"` | File was uploaded and extracted | Use `extractedText` from `/api/import/file` as source |
+| `"url"` | URL was scraped and extracted | Use `extractedText` from `/api/import/url` as source |
+| `"drive"` | Google Docs content | Use Drive API to fetch doc content |
+| `null` | Normal prompt-based generation | Default LLM behaviour |
+
+### URL Scraping Notes:
+- Supported: public webpages, blog posts, Notion docs (public only)
+- Use `cheerio` + `axios` or `playwright` for scraping
+- Strip navigation/footer boilerplate, extract main content only
+- Respect `robots.txt`

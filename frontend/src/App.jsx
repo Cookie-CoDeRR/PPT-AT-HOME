@@ -4,6 +4,7 @@ import CreationLauncher from './components/CreationLauncher';
 import PasteTextLauncher from './components/PasteTextLauncher';
 import WizardForm from './components/WizardForm';
 import TemplatePicker from './components/TemplatePicker';
+import ImportLauncher from './components/ImportLauncher';
 import Workspace from './components/Workspace';
 import HistoryPanel from './components/HistoryPanel';
 import SettingsPanel from './components/SettingsPanel';
@@ -27,8 +28,8 @@ function App() {
       .catch(e => console.error("Discovery failed", e));
   }, []);
   
-  // Navigation: 'home' | 'create' | 'paste' | 'wizard' | 'template-pick' | 'workspace'
-  const [view, setView] = useState('template-pick');
+  // Navigation: 'home' | 'create' | 'paste' | 'wizard' | 'template-pick' | 'import' | 'workspace'
+  const [view, setView] = useState('import');
 
   // Universal dark/light mode (persisted in localStorage)
   const [darkMode, setDarkMode] = useState(() => {
@@ -70,11 +71,13 @@ function App() {
 
   const handleSelectMode = (modeId) => {
     if (modeId === 'template') {
-      setView('template-pick');   // opens the new TemplatePicker gallery
+      setView('template-pick');
     } else if (modeId === 'paste') {
       setView('paste');
+    } else if (modeId === 'import') {
+      setView('import');
     } else {
-      // 'generate', 'import' → creation launcher
+      // 'generate' → creation launcher
       setView('create');
     }
   };
@@ -283,6 +286,31 @@ function App() {
                   includeImages: true,
                   templateId: template.id,
                   templateName: template.name,
+                });
+              }}
+            />
+        )}
+
+        {view === 'import' && (
+            <ImportLauncher
+              darkMode={darkMode}
+              onBack={() => setView('home')}
+              onPasteInText={() => setView('paste')}
+              onImport={(importData) => {
+                handleGenerateJson({
+                  prompt: importData.url
+                    ? `Transform the content at ${importData.url} into a presentation`
+                    : 'Transform the uploaded file into a presentation',
+                  contentType: 'presentation',
+                  importType: importData.importType,    // 'file' | 'drive' | 'url'
+                  importUrl: importData.url || null,
+                  importFile: importData.file || null,
+                  slideCount: 10,
+                  tone: 'Professional/Corporate',
+                  theme: 'Modern Minimalist',
+                  templateType: 'default',
+                  density: 'Detailed',
+                  includeImages: true,
                 });
               }}
             />
