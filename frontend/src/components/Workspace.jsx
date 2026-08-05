@@ -5,8 +5,21 @@ import SlideRenderer from './SlideRenderer';
 import { THEME_PRESETS } from '../config/themes';
 import IncrementalChat from './IncrementalChat';
 
-export default function Workspace({ slides, setSlides, title, theme, setTheme, onExport, isExporting, slideSize, setSlideSize, customThemeSettings, setCustomThemeSettings, customBackground, setCustomBackground, baseUrl, model }) {
+export default function Workspace({ darkMode = true, slides, setSlides, title, theme, setTheme, onExport, isExporting, slideSize, setSlideSize, customThemeSettings, setCustomThemeSettings, customBackground, setCustomBackground, baseUrl, model }) {
   const [activeTab, setActiveTab] = useState('theme'); // 'theme' or 'settings'
+
+  const panelBg = darkMode ? 'bg-white/5 backdrop-blur-xl border border-white/10' : 'bg-white border border-gray-200 shadow-xl';
+  const textMuted = darkMode ? 'text-gray-400' : 'text-gray-500';
+  const textTitle = darkMode ? 'text-gray-200' : 'text-gray-800';
+  const textHeading = darkMode ? 'text-transparent bg-clip-text bg-gradient-to-br from-white to-gray-400' : 'text-transparent bg-clip-text bg-gradient-to-br from-gray-900 to-gray-600';
+  const itemBg = darkMode ? 'bg-white/5 border-white/5 hover:bg-white/10' : 'bg-gray-50 border-gray-100 hover:bg-gray-100';
+  const itemBgActive = darkMode ? 'border-violet-500 bg-violet-500/10' : 'border-violet-500 bg-violet-50';
+  const inputBg = darkMode ? 'bg-white/5 border-white/10 text-white placeholder-gray-500' : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400';
+  const tabActive = darkMode ? 'text-violet-400 border-b-2 border-violet-400 bg-white/5' : 'text-violet-600 border-b-2 border-violet-600 bg-violet-50/50';
+  const tabInactive = darkMode ? 'text-gray-500 hover:text-gray-300' : 'text-gray-600 hover:text-gray-900';
+  const actionBtnBg = darkMode ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900';
+  const divider = darkMode ? 'border-white/10' : 'border-gray-200';
+  const outlineBg = darkMode ? 'bg-white/10' : 'bg-gray-200';
 
   const themes = THEME_PRESETS.reduce((acc, preset) => {
     acc[preset.name] = {
@@ -65,8 +78,8 @@ export default function Workspace({ slides, setSlides, title, theme, setTheme, o
       
       {/* LEFT SIDEBAR: Navigation Outline */}
       <div className="w-64 flex-shrink-0 flex flex-col gap-4">
-        <div className="glass-panel p-4 flex-1 overflow-y-auto overflow-x-hidden flex flex-col custom-scrollbar">
-          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 px-2">Outline</h3>
+        <div className={`p-4 flex-1 overflow-y-auto overflow-x-hidden flex flex-col custom-scrollbar rounded-2xl ${panelBg}`}>
+          <h3 className={`text-xs font-bold uppercase tracking-wider mb-4 px-2 ${textMuted}`}>Outline</h3>
           
           <Reorder.Group axis="y" values={slides} onReorder={handleReorder} className="flex flex-col gap-2 flex-1">
             {slides.map((slide, index) => (
@@ -74,18 +87,18 @@ export default function Workspace({ slides, setSlides, title, theme, setTheme, o
                 key={slide.slide_number + slide.title + index} 
                 value={slide}
                 onClick={() => handleJumpToSlide(index)}
-                className="group relative flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 cursor-grab active:cursor-grabbing transition-colors"
+                className={`group relative flex items-center gap-3 p-3 rounded-xl border cursor-grab active:cursor-grabbing transition-colors ${itemBg}`}
               >
-                <GripVertical className="w-4 h-4 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity absolute left-1" />
-                <div className="w-6 h-6 rounded-md bg-white/10 flex items-center justify-center text-xs font-bold text-gray-400 ml-4 flex-shrink-0">
+                <GripVertical className={`w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity absolute left-1 ${textMuted}`} />
+                <div className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold ml-4 flex-shrink-0 ${outlineBg} ${textTitle}`}>
                   {index + 1}
                 </div>
-                <div className="truncate text-sm text-gray-200 font-medium">{slide.title || 'Untitled Slide'}</div>
+                <div className={`truncate text-sm font-medium ${textTitle}`}>{slide.title || 'Untitled Slide'}</div>
               </Reorder.Item>
             ))}
           </Reorder.Group>
 
-          <button onClick={handleAddSlide} className="mt-4 flex items-center justify-center gap-2 w-full p-3 rounded-xl border border-dashed border-white/20 text-gray-400 hover:bg-white/5 hover:text-gray-200 transition-colors text-sm font-bold">
+          <button onClick={handleAddSlide} className={`mt-4 flex items-center justify-center gap-2 w-full p-3 rounded-xl border border-dashed text-sm font-bold transition-colors ${darkMode ? 'border-white/20 text-gray-400 hover:bg-white/5 hover:text-gray-200' : 'border-gray-300 text-gray-500 hover:bg-gray-100 hover:text-gray-700'}`}>
             <Plus className="w-4 h-4" /> Add Slide
           </button>
         </div>
@@ -96,7 +109,7 @@ export default function Workspace({ slides, setSlides, title, theme, setTheme, o
         <div className="max-w-3xl mx-auto space-y-12">
           
           <div className="text-center mb-16 pt-8">
-             <h1 className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-br from-white to-gray-400 tracking-tight leading-tight">
+             <h1 className={`text-5xl font-extrabold tracking-tight leading-tight ${textHeading}`}>
                {title}
              </h1>
           </div>
@@ -111,16 +124,16 @@ export default function Workspace({ slides, setSlides, title, theme, setTheme, o
             >
               {/* Inline Action Toolbar (Visible on Hover) */}
               <div className="absolute -right-12 top-0 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-2">
-                <button className="p-2 rounded-lg bg-white/10 hover:bg-violet-500/20 text-gray-400 hover:text-violet-400 transition-colors tooltip" title="AI Rewrite (Coming Soon)">
+                <button className={`p-2 rounded-lg transition-colors tooltip ${darkMode ? 'bg-white/10 hover:bg-violet-500/20 text-gray-400 hover:text-violet-400' : 'bg-white shadow border hover:bg-violet-50 text-gray-500 hover:text-violet-600'}`} title="AI Rewrite (Coming Soon)">
                   <Edit3 className="w-4 h-4" />
                 </button>
-                <button className="p-2 rounded-lg bg-white/10 hover:bg-fuchsia-500/20 text-gray-400 hover:text-fuchsia-400 transition-colors tooltip" title="Regenerate Image (Coming Soon)">
+                <button className={`p-2 rounded-lg transition-colors tooltip ${darkMode ? 'bg-white/10 hover:bg-fuchsia-500/20 text-gray-400 hover:text-fuchsia-400' : 'bg-white shadow border hover:bg-fuchsia-50 text-gray-500 hover:text-fuchsia-600'}`} title="Regenerate Image (Coming Soon)">
                   <ImageIcon className="w-4 h-4" />
                 </button>
-                <button onClick={() => handleDuplicate(slide, index)} className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-gray-400 hover:text-white transition-colors tooltip" title="Duplicate">
+                <button onClick={() => handleDuplicate(slide, index)} className={`p-2 rounded-lg transition-colors tooltip ${darkMode ? 'bg-white/10 hover:bg-white/20 text-gray-400 hover:text-white' : 'bg-white shadow border hover:bg-gray-100 text-gray-500 hover:text-gray-800'}`} title="Duplicate">
                   <Copy className="w-4 h-4" />
                 </button>
-                <button onClick={() => handleDelete(index)} className="p-2 rounded-lg bg-white/10 hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors tooltip" title="Delete">
+                <button onClick={() => handleDelete(index)} className={`p-2 rounded-lg transition-colors tooltip ${darkMode ? 'bg-white/10 hover:bg-red-500/20 text-gray-400 hover:text-red-400' : 'bg-white shadow border hover:bg-red-50 text-gray-500 hover:text-red-600'}`} title="Delete">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -156,7 +169,7 @@ export default function Workspace({ slides, setSlides, title, theme, setTheme, o
           
           <button 
             onClick={handleAddSlide}
-            className="w-full mt-4 flex items-center justify-center gap-2 p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-violet-500/30 text-gray-400 hover:text-violet-300 transition-all group"
+            className={`w-full mt-4 flex items-center justify-center gap-2 p-3 rounded-xl border transition-all group ${darkMode ? 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-violet-500/30 text-gray-400 hover:text-violet-300' : 'bg-white border-gray-200 hover:bg-gray-50 hover:border-violet-500/30 text-gray-500 hover:text-violet-600'}`}
           >
             <Plus className="w-5 h-5 group-hover:scale-125 transition-transform" />
             Add Slide
@@ -173,19 +186,19 @@ export default function Workspace({ slides, setSlides, title, theme, setTheme, o
 
       {/* RIGHT DRAWER: Controls */}
       <div className="w-80 flex-shrink-0">
-        <div className="glass-panel h-full flex flex-col overflow-hidden">
+        <div className={`h-full flex flex-col overflow-hidden rounded-2xl ${panelBg}`}>
           
-          <div className="flex border-b border-white/10">
-            <button onClick={() => setActiveTab('theme')} className={`flex-1 py-4 text-xs font-bold uppercase tracking-wider transition-colors ${activeTab === 'theme' ? 'text-violet-400 border-b-2 border-violet-400 bg-white/5' : 'text-gray-500 hover:text-gray-300'}`}>
+          <div className={`flex border-b ${divider}`}>
+            <button onClick={() => setActiveTab('theme')} className={`flex-1 py-4 text-xs font-bold uppercase tracking-wider transition-colors ${activeTab === 'theme' ? tabActive : tabInactive}`}>
               <span className="flex flex-col items-center justify-center gap-1"><Palette className="w-4 h-4"/> Theme</span>
             </button>
-            <button onClick={() => setActiveTab('layout')} className={`flex-1 py-4 text-xs font-bold uppercase tracking-wider transition-colors ${activeTab === 'layout' ? 'text-violet-400 border-b-2 border-violet-400 bg-white/5' : 'text-gray-500 hover:text-gray-300'}`}>
+            <button onClick={() => setActiveTab('layout')} className={`flex-1 py-4 text-xs font-bold uppercase tracking-wider transition-colors ${activeTab === 'layout' ? tabActive : tabInactive}`}>
               <span className="flex flex-col items-center justify-center gap-1"><LayoutTemplate className="w-4 h-4"/> Layout</span>
             </button>
-            <button onClick={() => setActiveTab('background')} className={`flex-1 py-4 text-xs font-bold uppercase tracking-wider transition-colors ${activeTab === 'background' ? 'text-violet-400 border-b-2 border-violet-400 bg-white/5' : 'text-gray-500 hover:text-gray-300'}`}>
+            <button onClick={() => setActiveTab('background')} className={`flex-1 py-4 text-xs font-bold uppercase tracking-wider transition-colors ${activeTab === 'background' ? tabActive : tabInactive}`}>
               <span className="flex flex-col items-center justify-center gap-1"><ImageIcon className="w-4 h-4"/> Bkgd</span>
             </button>
-            <button onClick={() => setActiveTab('settings')} className={`flex-1 py-4 text-xs font-bold uppercase tracking-wider transition-colors ${activeTab === 'settings' ? 'text-violet-400 border-b-2 border-violet-400 bg-white/5' : 'text-gray-500 hover:text-gray-300'}`}>
+            <button onClick={() => setActiveTab('settings')} className={`flex-1 py-4 text-xs font-bold uppercase tracking-wider transition-colors ${activeTab === 'settings' ? tabActive : tabInactive}`}>
               <span className="flex flex-col items-center justify-center gap-1"><Settings className="w-4 h-4"/> Export</span>
             </button>
           </div>
@@ -193,54 +206,54 @@ export default function Workspace({ slides, setSlides, title, theme, setTheme, o
           <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
             {activeTab === 'theme' && (
               <div className="space-y-4">
-                 <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Presets</h4>
+                 <h4 className={`text-xs font-bold uppercase tracking-wider mb-2 ${textMuted}`}>Presets</h4>
                  <div className="space-y-2">
                    {THEME_PRESETS.map(preset => (
                       <button 
                         key={preset.id} 
                         onClick={() => setTheme(preset.name)}
-                        className={`w-full p-3 rounded-xl text-left border transition-all ${theme === preset.name ? 'border-violet-500 bg-violet-500/10' : 'border-white/10 hover:bg-white/5 hover:border-white/20'}`}
+                        className={`w-full p-3 rounded-xl text-left border transition-all ${theme === preset.name ? itemBgActive : itemBg}`}
                       >
-                        <div className="text-sm font-bold text-gray-200">{preset.name}</div>
-                        <div className="text-xs text-gray-400 mt-1" style={{ fontFamily: preset.headerFont }}>Heading</div>
-                        <div className="text-xs text-gray-400" style={{ fontFamily: preset.bodyFont }}>Body Text</div>
+                        <div className={`text-sm font-bold ${textTitle}`}>{preset.name}</div>
+                        <div className={`text-xs mt-1 ${textMuted}`} style={{ fontFamily: preset.headerFont }}>Heading</div>
+                        <div className={`text-xs ${textMuted}`} style={{ fontFamily: preset.bodyFont }}>Body Text</div>
                       </button>
                    ))}
                    <button 
                      onClick={() => setTheme('Custom')}
-                     className={`w-full p-3 rounded-xl text-left border transition-all ${theme === 'Custom' ? 'border-violet-500 bg-violet-500/10' : 'border-white/10 hover:bg-white/5 hover:border-white/20'}`}
+                     className={`w-full p-3 rounded-xl text-left border transition-all ${theme === 'Custom' ? itemBgActive : itemBg}`}
                    >
-                     <div className="text-sm font-bold text-gray-200">Custom...</div>
+                     <div className={`text-sm font-bold ${textTitle}`}>Custom...</div>
                    </button>
                  </div>
 
                  <AnimatePresence>
                    {theme === 'Custom' && (
-                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-4 overflow-hidden pt-4 border-t border-white/10">
+                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className={`space-y-4 overflow-hidden pt-4 border-t ${divider}`}>
                         <div className="flex flex-col gap-1.5">
-                          <label className="text-xs font-bold text-gray-400">Background Color</label>
+                          <label className={`text-xs font-bold ${textMuted}`}>Background Color</label>
                           <div className="flex items-center gap-2">
                             <input type="color" value={'#' + customThemeSettings.bkgd} onChange={e => setCustomThemeSettings({...customThemeSettings, bkgd: e.target.value.replace('#', '')})} className="w-8 h-8 rounded border-none bg-transparent cursor-pointer" />
-                            <input type="text" value={customThemeSettings.bkgd} onChange={e => setCustomThemeSettings({...customThemeSettings, bkgd: e.target.value})} className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm outline-none" />
+                            <input type="text" value={customThemeSettings.bkgd} onChange={e => setCustomThemeSettings({...customThemeSettings, bkgd: e.target.value})} className={`flex-1 rounded-lg px-3 py-1.5 text-sm outline-none ${inputBg}`} />
                           </div>
                         </div>
                         <div className="flex flex-col gap-1.5">
-                          <label className="text-xs font-bold text-gray-400">Text Color</label>
+                          <label className={`text-xs font-bold ${textMuted}`}>Text Color</label>
                           <div className="flex items-center gap-2">
                             <input type="color" value={'#' + customThemeSettings.textColor} onChange={e => setCustomThemeSettings({...customThemeSettings, textColor: e.target.value.replace('#', '')})} className="w-8 h-8 rounded border-none bg-transparent cursor-pointer" />
-                            <input type="text" value={customThemeSettings.textColor} onChange={e => setCustomThemeSettings({...customThemeSettings, textColor: e.target.value})} className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm outline-none" />
+                            <input type="text" value={customThemeSettings.textColor} onChange={e => setCustomThemeSettings({...customThemeSettings, textColor: e.target.value})} className={`flex-1 rounded-lg px-3 py-1.5 text-sm outline-none ${inputBg}`} />
                           </div>
                         </div>
                         <div className="flex flex-col gap-1.5">
-                          <label className="text-xs font-bold text-gray-400">Accent Color</label>
+                          <label className={`text-xs font-bold ${textMuted}`}>Accent Color</label>
                           <div className="flex items-center gap-2">
                             <input type="color" value={'#' + customThemeSettings.accent} onChange={e => setCustomThemeSettings({...customThemeSettings, accent: e.target.value.replace('#', '')})} className="w-8 h-8 rounded border-none bg-transparent cursor-pointer" />
-                            <input type="text" value={customThemeSettings.accent} onChange={e => setCustomThemeSettings({...customThemeSettings, accent: e.target.value})} className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm outline-none" />
+                            <input type="text" value={customThemeSettings.accent} onChange={e => setCustomThemeSettings({...customThemeSettings, accent: e.target.value})} className={`flex-1 rounded-lg px-3 py-1.5 text-sm outline-none ${inputBg}`} />
                           </div>
                         </div>
                         <div className="flex flex-col gap-1.5">
-                          <label className="text-xs font-bold text-gray-400">Typography / Font</label>
-                          <select value={customThemeSettings.fontFace} onChange={e => setCustomThemeSettings({...customThemeSettings, fontFace: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none w-full appearance-none">
+                          <label className={`text-xs font-bold ${textMuted}`}>Typography / Font</label>
+                          <select value={customThemeSettings.fontFace} onChange={e => setCustomThemeSettings({...customThemeSettings, fontFace: e.target.value})} className={`rounded-lg px-3 py-2 text-sm outline-none w-full appearance-none ${inputBg}`}>
                             <option value="Helvetica Neue">Helvetica Neue (Modern)</option>
                             <option value="Arial">Arial (Clean)</option>
                             <option value="Consolas">Consolas (Code)</option>
@@ -261,25 +274,25 @@ export default function Workspace({ slides, setSlides, title, theme, setTheme, o
             
             {activeTab === 'background' && (
               <div className="space-y-6">
-                <div className="flex bg-white/5 rounded-lg p-1">
-                  <button onClick={() => setCustomBackground({...customBackground, type: 'solid'})} className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-colors ${customBackground.type === 'solid' ? 'bg-violet-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}>Solid</button>
-                  <button onClick={() => setCustomBackground({...customBackground, type: 'gradient'})} className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-colors ${customBackground.type === 'gradient' ? 'bg-violet-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}>Gradient</button>
-                  <button onClick={() => setCustomBackground({...customBackground, type: 'image'})} className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-colors ${customBackground.type === 'image' ? 'bg-violet-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}>Image</button>
+                <div className={`flex rounded-lg p-1 ${darkMode ? 'bg-white/5' : 'bg-gray-100'}`}>
+                  <button onClick={() => setCustomBackground({...customBackground, type: 'solid'})} className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-colors ${customBackground.type === 'solid' ? 'bg-violet-600 text-white' : `${textMuted} hover:${textTitle}`}`}>Solid</button>
+                  <button onClick={() => setCustomBackground({...customBackground, type: 'gradient'})} className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-colors ${customBackground.type === 'gradient' ? 'bg-violet-600 text-white' : `${textMuted} hover:${textTitle}`}`}>Gradient</button>
+                  <button onClick={() => setCustomBackground({...customBackground, type: 'image'})} className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-colors ${customBackground.type === 'image' ? 'bg-violet-600 text-white' : `${textMuted} hover:${textTitle}`}`}>Image</button>
                 </div>
                 
                 {customBackground.type === 'solid' && (
                   <div className="space-y-4">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Hex Color</label>
+                    <label className={`text-xs font-bold uppercase tracking-wider ${textMuted}`}>Hex Color</label>
                     <div className="flex items-center gap-2">
                       <input type="color" value={customBackground.value.startsWith('#') ? customBackground.value : '#000000'} onChange={e => setCustomBackground({...customBackground, value: e.target.value})} className="w-10 h-10 rounded border-none bg-transparent cursor-pointer" />
-                      <input type="text" value={customBackground.value} onChange={e => setCustomBackground({...customBackground, value: e.target.value})} className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none placeholder-gray-600" placeholder="#0B0F17" />
+                      <input type="text" value={customBackground.value} onChange={e => setCustomBackground({...customBackground, value: e.target.value})} className={`flex-1 rounded-lg px-3 py-2 text-sm outline-none placeholder-gray-400 ${inputBg}`} placeholder="#0B0F17" />
                     </div>
                   </div>
                 )}
                 
                 {customBackground.type === 'gradient' && (
                   <div className="space-y-4">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Presets</label>
+                    <label className={`text-xs font-bold uppercase tracking-wider ${textMuted}`}>Presets</label>
                     <div className="grid grid-cols-2 gap-2">
                       {[
                         'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)',
@@ -289,7 +302,7 @@ export default function Workspace({ slides, setSlides, title, theme, setTheme, o
                         'linear-gradient(to right, #1a2980, #26d0ce)',
                         'linear-gradient(135deg, #1f4037 0%, #99f2c8 100%)'
                       ].map((grad, i) => (
-                        <div key={i} onClick={() => setCustomBackground({...customBackground, value: grad})} className={`h-16 rounded-lg cursor-pointer border-2 transition-all ${customBackground.value === grad ? 'border-violet-500 scale-105' : 'border-transparent hover:border-white/20'}`} style={{ background: grad }}></div>
+                        <div key={i} onClick={() => setCustomBackground({...customBackground, value: grad})} className={`h-16 rounded-lg cursor-pointer border-2 transition-all ${customBackground.value === grad ? 'border-violet-500 scale-105' : 'border-transparent hover:border-gray-400/50'}`} style={{ background: grad }}></div>
                       ))}
                     </div>
                   </div>
@@ -297,8 +310,8 @@ export default function Workspace({ slides, setSlides, title, theme, setTheme, o
                 
                 {customBackground.type === 'image' && (
                   <div className="space-y-4">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Upload Local Image</label>
-                    <div className="border-2 border-dashed border-white/10 rounded-xl p-6 flex flex-col items-center justify-center bg-white/5 hover:bg-white/10 transition-colors relative cursor-pointer">
+                    <label className={`text-xs font-bold uppercase tracking-wider ${textMuted}`}>Upload Local Image</label>
+                    <div className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center transition-colors relative cursor-pointer ${darkMode ? 'border-white/10 bg-white/5 hover:bg-white/10' : 'border-gray-300 bg-gray-50 hover:bg-gray-100'}`}>
                       <input type="file" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="image/*" onChange={(e) => {
                         const file = e.target.files[0];
                         if (file) {
@@ -309,15 +322,15 @@ export default function Workspace({ slides, setSlides, title, theme, setTheme, o
                           reader.readAsDataURL(file);
                         }
                       }} />
-                      <ImageIcon className="w-6 h-6 text-gray-400 mb-2" />
-                      <span className="text-xs text-gray-400 font-medium">Click or Drop Image</span>
+                      <ImageIcon className={`w-6 h-6 mb-2 ${textMuted}`} />
+                      <span className={`text-xs font-medium ${textMuted}`}>Click or Drop Image</span>
                     </div>
                     {customBackground.value && customBackground.value.startsWith('data:image') && (
-                      <div className="mt-2 text-xs text-green-400 font-bold flex items-center gap-1">✓ Image Loaded</div>
+                      <div className="mt-2 text-xs text-green-500 font-bold flex items-center gap-1">✓ Image Loaded</div>
                     )}
                     
-                    <div className="pt-4 border-t border-white/10">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">AI Generator</label>
+                    <div className={`pt-4 border-t ${divider}`}>
+                      <label className={`text-xs font-bold uppercase tracking-wider mb-2 block ${textMuted}`}>AI Generator</label>
                       <button className="w-full flex justify-center items-center gap-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-bold py-2 px-4 rounded-lg transition-all shadow-lg text-sm">
                         Generate via Local AI
                       </button>
@@ -325,11 +338,11 @@ export default function Workspace({ slides, setSlides, title, theme, setTheme, o
                   </div>
                 )}
                 
-                <div className="pt-4 border-t border-white/10 space-y-4">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Overlay Controls</label>
+                <div className={`pt-4 border-t space-y-4 ${divider}`}>
+                  <label className={`text-xs font-bold uppercase tracking-wider ${textMuted}`}>Overlay Controls</label>
                   <div className="flex items-center gap-2">
                     <input type="color" value={customBackground.overlayColor} onChange={e => setCustomBackground({...customBackground, overlayColor: e.target.value})} className="w-8 h-8 rounded border-none bg-transparent cursor-pointer" />
-                    <span className="text-xs text-gray-400 font-medium">Overlay Color</span>
+                    <span className={`text-xs font-medium ${textMuted}`}>Overlay Color</span>
                   </div>
                   <div>
                     <div className="flex justify-between text-xs text-gray-400 mb-1">
@@ -345,7 +358,7 @@ export default function Workspace({ slides, setSlides, title, theme, setTheme, o
             {activeTab === 'layout' && (
               <div className="space-y-4">
                  <div className="flex flex-col gap-3">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Slide Dimensions</label>
+                    <label className={`text-xs font-bold uppercase tracking-wider ${textMuted}`}>Slide Dimensions</label>
                     <div className="space-y-2">
                       {[
                         { id: 'LAYOUT_16x9', name: '16:9 (Standard Modern)', desc: 'Best for modern screens and projectors.' },
@@ -355,10 +368,10 @@ export default function Workspace({ slides, setSlides, title, theme, setTheme, o
                         <button 
                           key={layout.id} 
                           onClick={() => setSlideSize(layout.id)}
-                          className={`w-full p-3 rounded-xl text-left border transition-all ${slideSize === layout.id ? 'border-violet-500 bg-violet-500/10' : 'border-white/10 hover:bg-white/5'}`}
+                          className={`w-full p-3 rounded-xl text-left border transition-all ${slideSize === layout.id ? itemBgActive : itemBg}`}
                         >
-                          <div className="text-sm font-bold text-gray-200">{layout.name}</div>
-                          <div className="text-xs text-gray-500 mt-1">{layout.desc}</div>
+                          <div className={`text-sm font-bold ${textTitle}`}>{layout.name}</div>
+                          <div className={`text-xs mt-1 ${textMuted}`}>{layout.desc}</div>
                         </button>
                       ))}
                     </div>
@@ -368,10 +381,10 @@ export default function Workspace({ slides, setSlides, title, theme, setTheme, o
 
             {activeTab === 'settings' && (
               <div className="space-y-4">
-                 <button onClick={() => onExport('local')} disabled={isExporting} className="w-full py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+                 <button onClick={() => onExport('local')} disabled={isExporting} className={`w-full py-3 rounded-xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 ${actionBtnBg}`}>
                    {isExporting ? <Loader2 className="w-4 h-4 animate-spin"/> : null} Download PPTX
                  </button>
-                 <button onClick={() => onExport('drive')} disabled={isExporting} className="w-full py-3 bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/20 rounded-xl font-bold transition-all disabled:opacity-50">
+                 <button onClick={() => onExport('drive')} disabled={isExporting} className={`w-full py-3 border rounded-xl font-bold transition-all disabled:opacity-50 ${darkMode ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border-blue-500/20' : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-200'}`}>
                    Export to Drive
                  </button>
               </div>

@@ -283,7 +283,7 @@ function App() {
                     onGenerate={handleGenerateJson}
                     isGenerating={isGenerating}
                     baseUrl={settings.baseUrl}
-                    onBack={() => setView('home')}
+                    onBack={() => setView('create-new')}
                   />
               )}
               {view === 'paste' && (
@@ -291,12 +291,12 @@ function App() {
                     darkMode={darkMode}
                     onGenerate={handleGenerateJson}
                     isGenerating={isGenerating}
-                    onBack={() => setView('home')}
+                    onBack={() => setView('create-new')}
                   />
               )}
               {view === 'template-pick' && (
                   <TemplatePicker
-                    onBack={() => setView('home')}
+                    onBack={() => setView('create-new')}
                     darkMode={darkMode}
                     onSelectTemplate={(template) => {
                       handleGenerateJson({
@@ -317,7 +317,7 @@ function App() {
               {view === 'import' && (
                   <ImportLauncher
                     darkMode={darkMode}
-                    onBack={() => setView('home')}
+                    onBack={() => setView('create-new')}
                     onPasteInText={() => setView('paste')}
                     onImport={(importData) => {
                       handleGenerateJson({
