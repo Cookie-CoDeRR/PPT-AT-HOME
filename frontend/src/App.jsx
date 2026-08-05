@@ -3,6 +3,7 @@ import HomePage from './components/HomePage';
 import CreationLauncher from './components/CreationLauncher';
 import PasteTextLauncher from './components/PasteTextLauncher';
 import WizardForm from './components/WizardForm';
+import TemplatePicker from './components/TemplatePicker';
 import Workspace from './components/Workspace';
 import HistoryPanel from './components/HistoryPanel';
 import SettingsPanel from './components/SettingsPanel';
@@ -26,8 +27,8 @@ function App() {
       .catch(e => console.error("Discovery failed", e));
   }, []);
   
-  // Navigation: 'home' | 'create' | 'paste' | 'wizard' | 'workspace'
-  const [view, setView] = useState('paste');
+  // Navigation: 'home' | 'create' | 'paste' | 'wizard' | 'template-pick' | 'workspace'
+  const [view, setView] = useState('template-pick');
 
   const [slidesJson, setSlidesJson] = useState(null);
   const [title, setTitle] = useState('');
@@ -229,6 +230,27 @@ function App() {
               onGenerate={handleGenerateJson}
               isGenerating={isGenerating}
               onBack={() => setView('home')}
+            />
+        )}
+
+        {view === 'template-pick' && (
+            <TemplatePicker
+              onBack={() => setView('home')}
+              onSelectTemplate={(template) => {
+                // Pre-fill the generation with the template's name as prompt
+                handleGenerateJson({
+                  prompt: `Create a ${template.name} presentation`,
+                  contentType: 'presentation',
+                  slideCount: 10,
+                  tone: 'Professional/Corporate',
+                  theme: 'Modern Minimalist',
+                  templateType: 'default',
+                  density: 'Detailed',
+                  includeImages: true,
+                  templateId: template.id,
+                  templateName: template.name,
+                });
+              }}
             />
         )}
 

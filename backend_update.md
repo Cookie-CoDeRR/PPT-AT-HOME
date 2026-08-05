@@ -1,4 +1,4 @@
-# Backend Update: Webpage, Document, Social, Graphic & Paste-in-Text Support
+# Backend Update: Template Picker, Paste-in-Text, Webpage, Document, Social & Graphic Support
 
 > **For Backend Engineers:** The frontend has been significantly updated. This document is the **single source of truth** for all API changes needed to make the frontend work end-to-end.
 
@@ -7,14 +7,15 @@
 ## Summary of New Frontend Pages
 
 > [!IMPORTANT]
-> **`PasteTextLauncher.jsx` is now the default start/greeting page** — the first screen users see when the app loads (`view` starts as `'paste'` in `App.jsx`).
+> **`TemplatePicker.jsx` is now the default start/greeting page** — the first screen users see when the app loads (`view` starts as `'template-pick'` in `App.jsx`). It currently uses **static hardcoded data** and needs a real `GET /api/templates` endpoint to be wired up.
 
 | Page | Component | Route Trigger | Status |
 |------|-----------|--------------|--------|
-| **Paste in Text** ⭐ (Start Page) | `PasteTextLauncher.jsx` | **App default view** | 🆕 New — now the greeting page |
+| **Choose a template** ⭐ (Start Page) | `TemplatePicker.jsx` | **App default view** | 🆕 New — now the greeting page |
+| **Paste in Text** | `PasteTextLauncher.jsx` | Home → "Paste in text" | ✅ Existing |
 | Generate (AI prompt) | `CreationLauncher.jsx` | Home → "Generate" | ✅ Existing, extended |
 | Home | `HomePage.jsx` | Logo click / Back buttons | ✅ Existing |
-| Create from Template | `WizardForm.jsx` | Home → "Create from template" | ✅ Existing |
+| Create from Template (Wizard) | `WizardForm.jsx` | Home → "Create from template" | ✅ Existing |
 | Workspace | `Workspace.jsx` | After generation | ✅ Existing |
 
 ---
@@ -115,8 +116,66 @@ If the user is in a Webpage, Document, or Social workspace and asks the AI to ed
 - **Workspace UI:** Future PRs will add `WebpageWorkspace.jsx` and `DocumentWorkspace.jsx`. Graphic workspace will need a grid view for image results.
 - **Paste Flow Routing:** Currently "Continue to prompt editor" calls `handleGenerateJson` directly. Future iteration should add a prompt-editor step where users can refine before generating.
 
+---
+
+## 5. NEW: `GET /api/templates` — Template Picker Page
+
+`TemplatePicker.jsx` is now the **start/greeting page**. It currently uses hardcoded static data. Once this endpoint is ready, replace the static arrays in the component.
+
+### Required Response Format:
+```json
+[
+  {
+    "id": "t1",
+    "name": "Best Practices Guide",
+    "category": "Company",
+    "tab": "templates",
+    "thumbnailUrl": "https://...",
+    "dark": true
+  },
+  {
+    "id": "w1",
+    "name": "Sales Incentive Kickoff",
+    "category": "Sales",
+    "tab": "workspace",
+    "thumbnailUrl": "https://...",
+    "dark": true
+  }
+]
+```
+
+### Query Parameters:
+| Param | Type | Description |
+|-------|------|-------------|
+| `tab` | `'templates'` \| `'workspace'` | Filter by tab type |
+| `category` | string | Filter by category name |
+| `q` | string | Search query |
+| `sort` | `'recommended'` \| `'newest'` \| `'most_used'` | Sort order |
+
+### Categories used by frontend:
+`Company`, `Creative`, `Education`, `Reporting`, `Project Management`, `Fundraising`, `Sales`, `Marketing`, `Consulting`, `People`, `Strategy`
+
+### When a template is selected:
+The frontend calls `POST /api/generate-json` with:
+```json
+{
+  "prompt": "Create a Best Practices Guide presentation",
+  "contentType": "presentation",
+  "templateId": "t1",
+  "templateName": "Best Practices Guide",
+  "slideCount": 10,
+  "tone": "Professional/Corporate",
+  "theme": "Modern Minimalist",
+  "templateType": "default",
+  "density": "Detailed",
+  "includeImages": true
+}
+```
+The backend should use `templateId` to optionally look up a pre-defined slide structure or system prompt for that template.
+
 ### Priority Order for Backend:
-1. ✅ Accept and log `contentType` in `/api/generate-json`
-2. ✅ Implement `pasteMode` switching in `llmService.js`
-3. ⬜ Add `graphic` content type routing to an image generation service
-4. ⬜ Adjust LLM prompts for `webpage`, `document`, `social`
+1. 🔴 Create `GET /api/templates` returning the JSON array above
+2. 🔴 Implement `pasteMode` switching in `llmService.js`
+3. 🟡 Accept `templateId` in `POST /api/generate-json` and use it to load a template-specific prompt
+4. 🟡 Add `graphic` content type routing to an image generation service
+5. ⬜ Adjust LLM prompts for `webpage`, `document`, `social`
