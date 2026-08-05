@@ -298,3 +298,61 @@ The `importType` field now accepted by the backend:
 - Use `cheerio` + `axios` or `playwright` for scraping
 - Strip navigation/footer boilerplate, extract main content only
 - Respect `robots.txt`
+
+---
+
+## 7. NEW: Media Library — `MediaLibrary.jsx` (Default Start View)
+
+The app now defaults to the **"Media Library"** view in the left sidebar. This requires three new endpoints.
+
+### 7.1 Fetch Media Items
+
+```
+GET /api/media
+```
+
+**Expected response:**
+```json
+[
+  {
+    "id": "1",
+    "url": "https://url-to-image.com",
+    "type": "image",
+    "date": "Apr 2026",
+    "created_at": "2026-04-12T10:00:00Z"
+  },
+  {
+    "id": "2",
+    "url": "https://url-to-graphic.com",
+    "type": "graphic",
+    "date": "Apr 2026",
+    "created_at": "2026-04-15T14:30:00Z"
+  }
+]
+```
+
+### 7.2 Create AI Image
+
+```
+POST /api/media/image
+Content-Type: application/json
+
+{
+  "prompt": "A cinematic view of a pirate ship at sunset"
+}
+```
+
+**Expected response:** Return the newly generated media object (same schema as above).
+
+### 7.3 Create Graphic
+
+```
+POST /api/media/graphic
+Content-Type: application/json
+
+{
+  "prompt": "A flat vector graphic of a windmill"
+}
+```
+
+**Expected response:** Return the newly generated graphic object.

@@ -5,8 +5,9 @@ import {
   Home, Image, LayoutTemplate, BookOpen, Settings, MoreHorizontal,
   Search, Users, Globe, Code2, Trash2, FolderPlus, Plus, Download,
   ChevronDown, Grid3X3, List, Star, Clock, User, Edit3, MoreVertical,
-  Sparkles, Presentation, SortDesc,
+  Sparkles, Presentation, SortDesc, Scissors
 } from 'lucide-react';
+import MediaLibrary from './MediaLibrary';
 
 // ─── Sidebar nav items ──────────────────────────────────────────────────────
 const SIDE_NAV = [
@@ -96,7 +97,7 @@ function DocCard({ item, darkMode }) {
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 export default function HomePage({ onCreateNew, onSelectMode, onShowHistory, darkMode }) {
-  const [activeNav,    setActiveNav]    = useState('home');
+  const [activeNav,    setActiveNav]    = useState('media');
   const [activeFilter, setActiveFilter] = useState('all');
   const [viewMode,     setViewMode]     = useState('grid');   // 'grid' | 'list'
   const [searchQuery,  setSearchQuery]  = useState('');
@@ -157,205 +158,232 @@ export default function HomePage({ onCreateNew, onSelectMode, onShowHistory, dar
 
       {/* ── Secondary sidebar ─────────────────────────────────────────────── */}
       <div className={`flex flex-col w-52 flex-shrink-0 border-r ${panelBg}`}>
-        {/* Workspace */}
-        <div className={`px-3 py-3 border-b ${divider}`}>
-          <button className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm font-semibold transition-colors ${sideLink}`}>
-            <div className="w-6 h-6 rounded bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-white text-[10px] font-bold">AW</div>
-            <span className={`flex-1 text-left text-xs truncate ${headerTxt}`}>My Workspace</span>
-            <ChevronDown className={`w-3 h-3 ${mutedTxt}`} />
-          </button>
-        </div>
-
-        {/* Nav links */}
-        <div className={`px-2 py-2 space-y-0.5 border-b ${divider}`}>
-          <p className={`text-[10px] font-bold uppercase tracking-widest px-2 mb-1 ${mutedTxt}`}>Gammas</p>
-          {[
-            { icon: Search,  label: 'Search ⌘K' },
-            { icon: Users,   label: 'Shared with you' },
-            { icon: Globe,   label: 'Sites' },
-            { icon: Code2,   label: 'API Generated' },
-          ].map(item => {
-            const Icon = item.icon;
-            return (
-              <button key={item.label} className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors ${sideLink}`}>
-                <Icon className="w-3.5 h-3.5" />
-                {item.label}
+        {/* Conditionally render secondary sidebar based on activeNav */}
+        {activeNav === 'home' && (
+          <>
+            {/* Workspace */}
+            <div className={`px-3 py-3 border-b ${divider}`}>
+              <button className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm font-semibold transition-colors ${sideLink}`}>
+                <div className="w-6 h-6 rounded bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-white text-[10px] font-bold">AW</div>
+                <span className={`flex-1 text-left text-xs truncate ${headerTxt}`}>My Workspace</span>
+                <ChevronDown className={`w-3 h-3 ${mutedTxt}`} />
               </button>
-            );
-          })}
-        </div>
+            </div>
 
-        {/* Folders */}
-        <div className="px-2 py-2 flex-1">
-          <p className={`text-[10px] font-bold uppercase tracking-widest px-2 mb-2 ${mutedTxt}`}>Folders</p>
-          <div className={`mx-2 p-3 rounded-xl ${darkMode ? 'bg-white/5' : 'bg-gray-50'}`}>
-            <p className={`text-xs ${mutedTxt} mb-1.5 leading-snug`}>Organize your gammas by topic and share them with your team</p>
-            <button className="text-xs text-blue-500 hover:text-blue-400 font-medium">Create or join a folder</button>
-          </div>
-        </div>
+            {/* Nav links */}
+            <div className={`px-2 py-2 space-y-0.5 border-b ${divider}`}>
+              <p className={`text-[10px] font-bold uppercase tracking-widest px-2 mb-1 ${mutedTxt}`}>Gammas</p>
+              {[
+                { icon: Search,  label: 'Search ⌘K' },
+                { icon: Users,   label: 'Shared with you' },
+                { icon: Globe,   label: 'Sites' },
+                { icon: Code2,   label: 'API Generated' },
+              ].map(item => {
+                const Icon = item.icon;
+                return (
+                  <button key={item.label} className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors ${sideLink}`}>
+                    <Icon className="w-3.5 h-3.5" />
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
 
-        {/* Trash */}
-        <div className={`px-2 py-2 border-t ${divider}`}>
-          <button className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors ${sideLink}`}>
-            <Trash2 className="w-3.5 h-3.5" /> Trash
-          </button>
-        </div>
+            {/* Folders */}
+            <div className="px-2 py-2 flex-1">
+              <p className={`text-[10px] font-bold uppercase tracking-widest px-2 mb-2 ${mutedTxt}`}>Folders</p>
+              <div className={`mx-2 p-3 rounded-xl ${darkMode ? 'bg-white/5' : 'bg-gray-50'}`}>
+                <p className={`text-xs ${mutedTxt} mb-1.5 leading-snug`}>Organize your gammas by topic and share them with your team</p>
+                <button className="text-xs text-blue-500 hover:text-blue-400 font-medium">Create or join a folder</button>
+              </div>
+            </div>
+
+            {/* Trash */}
+            <div className={`px-2 py-2 border-t ${divider}`}>
+              <button className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors ${sideLink}`}>
+                <Trash2 className="w-3.5 h-3.5" /> Trash
+              </button>
+            </div>
+          </>
+        )}
+
+        {activeNav === 'media' && (
+          <>
+            <div className={`px-4 py-4 border-b ${divider}`}>
+              <h2 className={`text-sm font-bold ${headerTxt}`}>Media Library</h2>
+            </div>
+            <div className="px-2 py-2 space-y-0.5 flex-1">
+              <button className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold ${darkMode ? 'bg-white/10 text-white' : 'bg-gray-200 text-gray-900'}`}>
+                <Image className="w-3.5 h-3.5" /> Media
+              </button>
+              <button className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors ${sideLink}`}>
+                <Scissors className="w-3.5 h-3.5" /> Graphics
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── Main content ──────────────────────────────────────────────────── */}
-      <div className="flex flex-col flex-1 min-w-0 overflow-y-auto">
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+        
+        {activeNav === 'media' ? (
+          <MediaLibrary darkMode={darkMode} />
+        ) : (
+          <div className="flex flex-col h-full overflow-y-auto">
+            {/* Top bar */}
+            <div className={`flex items-center gap-3 px-6 py-3 border-b flex-shrink-0 ${darkMode ? 'border-white/5' : 'border-gray-100'}`}>
+              <div className="flex items-center gap-2 flex-1">
+                <Grid3X3 className={`w-4 h-4 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`} />
+                <span className={`font-bold text-base ${headerTxt}`}>Gammas</span>
+              </div>
 
-        {/* Top bar */}
-        <div className={`flex items-center gap-3 px-6 py-3 border-b flex-shrink-0 ${darkMode ? 'border-white/5' : 'border-gray-100'}`}>
-          <div className="flex items-center gap-2 flex-1">
-            <Grid3X3 className={`w-4 h-4 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`} />
-            <span className={`font-bold text-base ${headerTxt}`}>Gammas</span>
-          </div>
+              {/* Search */}
+              <div className={`hidden md:flex items-center gap-2 rounded-lg px-3 py-1.5 border text-sm flex-1 max-w-xs ${inputBg}`}>
+                <Search className="w-4 h-4 flex-shrink-0 opacity-60" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search..."
+                  className="bg-transparent outline-none flex-1 text-sm"
+                />
+              </div>
 
-          {/* Search */}
-          <div className={`hidden md:flex items-center gap-2 rounded-lg px-3 py-1.5 border text-sm flex-1 max-w-xs ${inputBg}`}>
-            <Search className="w-4 h-4 flex-shrink-0 opacity-60" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search..."
-              className="bg-transparent outline-none flex-1 text-sm"
-            />
-          </div>
+              {/* Right icons */}
+              <div className="flex items-center gap-2">
+                <button className={`p-1.5 rounded-lg transition-colors ${navItemDef}`} title="Notifications">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+                </button>
+              </div>
+            </div>
 
-          {/* Right icons */}
-          <div className="flex items-center gap-2">
-            <button className={`p-1.5 rounded-lg transition-colors ${navItemDef}`} title="Notifications">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
-            </button>
-          </div>
-        </div>
+            {/* Action bar */}
+            <div className="flex items-center gap-2 px-6 py-4 flex-shrink-0">
+              {/* ⭐ CREATE NEW button */}
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={onCreateNew}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 text-white font-bold text-sm shadow-lg shadow-blue-500/20 transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                Create new
+                <span className="ml-1 px-1.5 py-0.5 bg-white/20 rounded-md text-[10px] font-bold tracking-wide">AI</span>
+              </motion.button>
 
-        {/* Action bar */}
-        <div className="flex items-center gap-2 px-6 py-4 flex-shrink-0">
-          {/* ⭐ CREATE NEW button */}
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.97 }}
-            onClick={onCreateNew}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 text-white font-bold text-sm shadow-lg shadow-blue-500/20 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            Create new
-            <span className="ml-1 px-1.5 py-0.5 bg-white/20 rounded-md text-[10px] font-bold tracking-wide">AI</span>
-          </motion.button>
+              {/* New gamma dropdown (placeholder) */}
+              <button className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-colors ${darkMode ? 'border-white/10 text-gray-300 hover:bg-white/5' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
+                <Plus className="w-3.5 h-3.5" />
+                New gamma
+                <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+              </button>
 
-          {/* New gamma dropdown (placeholder) */}
-          <button className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-colors ${darkMode ? 'border-white/10 text-gray-300 hover:bg-white/5' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
-            <Plus className="w-3.5 h-3.5" />
-            New gamma
-            <ChevronDown className="w-3.5 h-3.5 opacity-60" />
-          </button>
-
-          {/* Import dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setImportOpen(o => !o)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-colors ${darkMode ? 'border-white/10 text-gray-300 hover:bg-white/5' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}
-            >
-              <Download className="w-3.5 h-3.5" />
-              Import
-              <ChevronDown className="w-3.5 h-3.5 opacity-60" />
-            </button>
-            <AnimatePresence>
-              {importOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: -6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  className={`absolute top-11 left-0 z-30 rounded-xl border shadow-2xl py-1 min-w-[180px] text-sm ${darkMode ? 'bg-[#1A2235] border-white/10' : 'bg-white border-gray-200'}`}
+              {/* Import dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setImportOpen(o => !o)}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-colors ${darkMode ? 'border-white/10 text-gray-300 hover:bg-white/5' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}
                 >
-                  {['Upload a file', 'Import from URL', 'Import from Drive'].map(opt => (
-                    <button
-                      key={opt}
-                      onClick={() => { setImportOpen(false); onSelectMode('import'); }}
-                      className={`w-full text-left px-3 py-2 transition-colors ${darkMode ? 'text-gray-300 hover:bg-white/5 hover:text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+                  <Download className="w-3.5 h-3.5" />
+                  Import
+                  <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+                </button>
+                <AnimatePresence>
+                  {importOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      className={`absolute top-11 left-0 z-30 rounded-xl border shadow-2xl py-1 min-w-[180px] text-sm ${darkMode ? 'bg-[#1A2235] border-white/10' : 'bg-white border-gray-200'}`}
                     >
-                      {opt}
+                      {['Upload a file', 'Import from URL', 'Import from Drive'].map(opt => (
+                        <button
+                          key={opt}
+                          onClick={() => { setImportOpen(false); onSelectMode('import'); }}
+                          className={`w-full text-left px-3 py-2 transition-colors ${darkMode ? 'text-gray-300 hover:bg-white/5 hover:text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+                        >
+                          {opt}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+
+            {/* Filter tabs + sort/view toggle */}
+            <div className={`flex items-center justify-between px-6 pb-3 flex-shrink-0`}>
+              <div className="flex items-center gap-1">
+                {FILTER_TABS.map(tab => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveFilter(tab.id)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${activeFilter === tab.id ? tabAct : tabDef}`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      {tab.label}
                     </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Sort */}
+                <button className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${mutedTxt} hover:text-current`}>
+                  <SortDesc className="w-3.5 h-3.5" /> Last edited
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+                <div className={`w-px h-4 ${darkMode ? 'bg-white/10' : 'bg-gray-200'}`} />
+                {/* Grid / List toggle */}
+                <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded transition-colors ${viewMode === 'grid' ? (darkMode ? 'bg-white/10 text-white' : 'bg-gray-200 text-gray-900') : mutedTxt}`}><Grid3X3 className="w-3.5 h-3.5" /></button>
+                <button onClick={() => setViewMode('list')} className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? (darkMode ? 'bg-white/10 text-white' : 'bg-gray-200 text-gray-900') : mutedTxt}`}><List className="w-3.5 h-3.5" /></button>
+              </div>
+            </div>
+
+            {/* Document grid */}
+            <div className="flex-1 px-6 pb-10">
+              {loading ? (
+                <div className="flex items-center justify-center py-20">
+                  <div className="w-6 h-6 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : filtered.length === 0 ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex flex-col items-center justify-center py-24 text-center"
+                >
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 flex items-center justify-center mb-4">
+                    <Presentation className="w-8 h-8 text-violet-400/60" />
+                  </div>
+                  <p className={`text-lg font-semibold mb-1 ${headerTxt}`}>No presentations yet</p>
+                  <p className={`text-sm mb-5 ${mutedTxt}`}>Create your first AI-powered presentation</p>
+                  <button
+                    onClick={onCreateNew}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white font-bold text-sm shadow-lg"
+                  >
+                    <Plus className="w-4 h-4" /> Create new
+                  </button>
+                </motion.div>
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className={viewMode === 'grid'
+                    ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4'
+                    : 'flex flex-col gap-2'
+                  }
+                >
+                  {filtered.map(doc => (
+                    <DocCard key={doc.id} item={doc} darkMode={darkMode} />
                   ))}
                 </motion.div>
               )}
-            </AnimatePresence>
-          </div>
-        </div>
-
-        {/* Filter tabs + sort/view toggle */}
-        <div className={`flex items-center justify-between px-6 pb-3 flex-shrink-0`}>
-          <div className="flex items-center gap-1">
-            {FILTER_TABS.map(tab => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveFilter(tab.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${activeFilter === tab.id ? tabAct : tabDef}`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Sort */}
-            <button className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${mutedTxt} hover:text-current`}>
-              <SortDesc className="w-3.5 h-3.5" /> Last edited
-              <ChevronDown className="w-3 h-3" />
-            </button>
-            <div className={`w-px h-4 ${darkMode ? 'bg-white/10' : 'bg-gray-200'}`} />
-            {/* Grid / List toggle */}
-            <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded transition-colors ${viewMode === 'grid' ? (darkMode ? 'bg-white/10 text-white' : 'bg-gray-200 text-gray-900') : mutedTxt}`}><Grid3X3 className="w-3.5 h-3.5" /></button>
-            <button onClick={() => setViewMode('list')} className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? (darkMode ? 'bg-white/10 text-white' : 'bg-gray-200 text-gray-900') : mutedTxt}`}><List className="w-3.5 h-3.5" /></button>
-          </div>
-        </div>
-
-        {/* Document grid */}
-        <div className="flex-1 px-6 pb-10">
-          {loading ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="w-6 h-6 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : filtered.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col items-center justify-center py-24 text-center"
-            >
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 flex items-center justify-center mb-4">
-                <Presentation className="w-8 h-8 text-violet-400/60" />
-              </div>
-              <p className={`text-lg font-semibold mb-1 ${headerTxt}`}>No presentations yet</p>
-              <p className={`text-sm mb-5 ${mutedTxt}`}>Create your first AI-powered presentation</p>
-              <button
-                onClick={onCreateNew}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white font-bold text-sm shadow-lg"
-              >
-                <Plus className="w-4 h-4" /> Create new
-              </button>
-            </motion.div>
-          ) : (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className={viewMode === 'grid'
-                ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4'
-                : 'flex flex-col gap-2'
-              }
-            >
-              {filtered.map(doc => (
-                <DocCard key={doc.id} item={doc} darkMode={darkMode} />
-              ))}
-            </motion.div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
