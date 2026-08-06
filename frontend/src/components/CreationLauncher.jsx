@@ -366,11 +366,6 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
               onChange={v => setSlideCount(Number(v))}
             />
             <PillDropdown
-              value={theme}
-              options={THEMES}
-              onChange={setTheme}
-            />
-            <PillDropdown
               value={orientationLabel}
               options={ORIENTATIONS}
               onChange={setOrientation}
@@ -388,11 +383,6 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
               value={slideCount}
               options={SLIDE_COUNTS}
               onChange={v => setSlideCount(Number(v))}
-            />
-            <PillDropdown
-              value={theme}
-              options={THEMES}
-              onChange={setTheme}
             />
             <PillDropdown
               value={orientationLabel}

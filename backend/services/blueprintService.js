@@ -143,7 +143,7 @@ async function getDetailedBlueprint(userPrompt, slideCount = 10) {
                 }
                 const blueprint = extracted.map(type => ({ slide_type: type }));
                 console.log(`[Blueprint Success] Extracted ${blueprint.length} slides from raw string parsing (Format 3).`);
-                return enforceBlueprintRules(blueprint);
+                return enforceBlueprintRules(blueprint, slideCount);
             }
 
             throw new Error("No JSON object or array found, and markdown/string parsing failed.");
@@ -159,22 +159,33 @@ async function getDetailedBlueprint(userPrompt, slideCount = 10) {
 
         if (Array.isArray(blueprint) && blueprint.length > 0) {
             console.log(`[Blueprint Success] Predicted ${blueprint.length} detailed slide blueprint.`);
-            return enforceBlueprintRules(blueprint);
+            return enforceBlueprintRules(blueprint, slideCount);
         }
         
         console.warn("[Blueprint Warning] Array empty or invalid. Using fallback.");
-        return enforceBlueprintRules(fallbackSequence);
+        return enforceBlueprintRules(fallbackSequence, slideCount);
 
     } catch (error) {
         console.error("[Blueprint Error] Router model failed:", error.message);
         console.log("[Blueprint Fallback] Using fallback sequence.");
-        return enforceBlueprintRules(fallbackSequence);
+        return enforceBlueprintRules(fallbackSequence, slideCount);
     }
 }
 
-function enforceBlueprintRules(blueprint) {
+function enforceBlueprintRules(blueprint, slideCount) {
     if (!Array.isArray(blueprint) || blueprint.length === 0) return blueprint;
     
+    // Ensure the array matches the requested slideCount exactly
+    if (slideCount && typeof slideCount === 'number') {
+        if (blueprint.length > slideCount) {
+            blueprint = blueprint.slice(0, slideCount);
+        }
+        const padTypes = ["bento_grid", "two_column_image", "comparison", "chart_pie", "chart_bar", "data_table", "standard_text"];
+        while (blueprint.length < slideCount) {
+            blueprint.push({ slide_type: padTypes[Math.floor(Math.random() * padTypes.length)] });
+        }
+    }
+
     // Ensure ONLY the first slide is a title layout
     if (blueprint[0].slide_type !== 'title_hero' && blueprint[0].slide_type !== 'title_split') {
         blueprint[0].slide_type = 'title_hero';
@@ -191,12 +202,13 @@ function enforceBlueprintRules(blueprint) {
         blueprint[0].slide_type = 'title_split';
     }
     
-    // Inject random variety if too many standard_text slides exist
-    const advancedTypes = ["bento_grid", "two_column_image", "comparison", "chart_pie", "chart_bar", "data_table"];
+    const advancedTypes = ["bento_grid", "two_column_image", "comparison", "chart_pie", "chart_bar", "data_table", "standard_text"];
+    
+    // Prevent consecutive identical layouts (model repetition loop fix)
     for (let i = 1; i < blueprint.length; i++) {
-        if (blueprint[i].slide_type === 'standard_text' && Math.random() > 0.5) {
-            // Pick a random advanced type
-            blueprint[i].slide_type = advancedTypes[Math.floor(Math.random() * advancedTypes.length)];
+        if (blueprint[i].slide_type === blueprint[i-1].slide_type) {
+            let available = advancedTypes.filter(t => t !== blueprint[i-1].slide_type);
+            blueprint[i].slide_type = available[Math.floor(Math.random() * available.length)];
         }
     }
     

@@ -180,6 +180,38 @@ app.post('/api/upload-context', upload.single('file'), async (req, res) => {
     }
 });
 
+// User Themes CRUD Endpoints
+app.get('/api/themes', (req, res) => {
+    try {
+        const themes = db.getThemes();
+        res.json(themes);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/themes', (req, res) => {
+    try {
+        const themeObj = req.body;
+        if (!themeObj.id || !themeObj.name) {
+            return res.status(400).json({ error: 'Theme must have an id and name' });
+        }
+        db.saveTheme(themeObj);
+        res.json({ success: true, id: themeObj.id });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/themes/:id', (req, res) => {
+    try {
+        db.deleteTheme(req.params.id);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // New Template Picker Endpoint
 app.get('/api/templates', (req, res) => {
     res.json([
@@ -333,6 +365,91 @@ app.post('/api/generate-json', async (req, res) => {
     }
 });
 
+// Generate JSON Stream Endpoint
+app.post('/api/generate-json-stream', async (req, res) => {
+    // Set headers for Server-Sent Events (SSE)
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const sendEvent = (event, data) => {
+        res.write(`event: ${event}\n`);
+        res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    try {
+        const { prompt, slideCount, tone, baseUrl, model, useRag, useWebRag, theme, density, includeImages, referenceImage, temperature, contentType, language, slideSize, graphicStyle, graphicCount, graphicQuality, pasteMode, importType, importUrl } = req.body;
+        
+        if (!prompt || !tone) {
+            sendEvent('error', { error: "Missing required parameters" });
+            return res.end();
+        }
+
+        if (contentType === 'graphic') {
+             sendEvent('status', { message: 'Generating graphic...', step: 1, totalSteps: 1 });
+             const mockUrl = `https://pollinations.ai/p/${encodeURIComponent(prompt)}?width=1024&height=1024`;
+             const media = db.saveMedia(mockUrl, 'graphic', prompt);
+             sendEvent('complete', { id: media.id, type: 'graphic', url: mockUrl });
+             return res.end();
+        }
+
+        sendEvent('status', { message: 'Gathering context via RAG...', step: 1, totalSteps: 5 });
+        const { searchContext, searchWeb } = require('./services/ragService');
+        let contextText = "";
+        const [docContext, webContext] = await Promise.all([
+            useRag ? searchContext(prompt, baseUrl, 3) : Promise.resolve(""),
+            searchWeb(prompt)
+        ]);
+
+        if (docContext) contextText += docContext;
+        if (webContext) {
+            contextText += (contextText ? '\n\n--- Web Search Context ---\n\n' : '') + webContext;
+        }
+
+        sendEvent('status', { message: 'Generating structural blueprint...', step: 2, totalSteps: 5 });
+        const { getDetailedBlueprint } = require('./services/blueprintService');
+        const blueprintSequence = await getDetailedBlueprint(prompt, slideCount || 1);
+
+        const { logGeneration } = require('./services/logger');
+        logGeneration(prompt, webContext, blueprintSequence);
+
+        sendEvent('status', { message: 'Drafting slide content...', step: 3, totalSteps: 5 });
+        const { generateSlideContent } = require('./services/llmService');
+        const slidesArray = await generateSlideContent(
+            prompt, 
+            blueprintSequence,
+            baseUrl,
+            model,
+            temperature || 0.6,
+            contextText,
+            { contentType, pasteMode }
+        );
+        
+        sendEvent('status', { message: 'Generating custom theme...', step: 4, totalSteps: 5 });
+        const { generateDynamicTheme } = require('./services/themeService');
+        const dynamicTheme = await generateDynamicTheme(prompt, baseUrl, model);
+
+        sendEvent('status', { message: 'Finalizing presentation...', step: 5, totalSteps: 5 });
+        const slidesJson = { title: prompt, slides: slidesArray, theme: dynamicTheme };
+        
+        const presTheme = dynamicTheme.name || "Dynamic Theme";
+        const dbId = db.savePresentation(slidesJson.title || "Untitled Presentation", slidesJson, presTheme);
+
+        sendEvent('complete', { 
+            id: dbId, 
+            slides: slidesJson.slides, 
+            title: slidesJson.title,
+            theme: dynamicTheme
+        });
+        res.end();
+    } catch (error) {
+        console.error("Error generating JSON stream:", error);
+        sendEvent('error', { error: error.message });
+        res.end();
+    }
+});
+
 // Generate Incremental Slide Endpoint
 app.post('/api/generate-incremental', async (req, res) => {
     try {
@@ -371,16 +488,19 @@ app.post('/api/generate-presentation', async (req, res) => {
         const { getDetailedBlueprint } = require('./services/blueprintService');
         const blueprintSequence = await getDetailedBlueprint(prompt, slide_count || 5);
 
-        // Fetch Web RAG Context automatically (Default behavior)
-        const { searchWeb } = require('./services/ragService');
-        const webContext = await searchWeb(prompt);
+        // Fetch RAG Context (Document DB first, fallback to Web)
+        const { searchContext, searchWeb } = require('./services/ragService');
+        let ragContext = await searchContext(prompt, baseUrl, 3);
+        if (!ragContext || ragContext.trim() === "") {
+            ragContext = await searchWeb(prompt);
+        }
 
         // Step 2: LLM Call with Retry & Sanitizer
         const { logGeneration } = require('./services/logger');
-        logGeneration(prompt, webContext, blueprintSequence);
+        logGeneration(prompt, ragContext, blueprintSequence);
 
         const { generateSlideContent } = require('./services/llmService');
-        const rawLLMOutput = await generateSlideContent(prompt, blueprintSequence, baseUrl, model, temperature, webContext);
+        const rawLLMOutput = await generateSlideContent(prompt, blueprintSequence, baseUrl, model, temperature, ragContext);
         
         const { validateAndHeal } = require('./services/jsonHealer');
         const validatedSlidesJson = await validateAndHeal(rawLLMOutput, baseUrl, model);
@@ -416,6 +536,89 @@ app.post('/api/generate-presentation', async (req, res) => {
     } catch (error) {
         console.error("Pipeline Failure:", error);
         res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Streaming Presentation Generation Endpoint
+app.post('/api/generate-presentation-stream', async (req, res) => {
+    // Set headers for Server-Sent Events (SSE)
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const sendEvent = (event, data) => {
+        res.write(`event: ${event}\n`);
+        res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    try {
+        const { prompt, slide_count, temperature, theme_id, baseUrl, model } = req.body;
+        
+        sendEvent('status', { message: 'Initializing theme...', step: 1, totalSteps: 8 });
+        const { THEMES } = require('./shared/themeEngine');
+        const theme = THEMES[theme_id] || THEMES.dark_glass;
+
+        // Step 1: Get Structural Blueprint
+        sendEvent('status', { message: 'Generating structural blueprint...', step: 2, totalSteps: 8 });
+        const { getDetailedBlueprint } = require('./services/blueprintService');
+        const blueprintSequence = await getDetailedBlueprint(prompt, slide_count || 5);
+
+        // Fetch RAG Context (Document DB first, fallback to Web)
+        sendEvent('status', { message: 'Gathering context via RAG...', step: 3, totalSteps: 8 });
+        const { searchContext, searchWeb } = require('./services/ragService');
+        let ragContext = await searchContext(prompt, baseUrl, 3);
+        if (!ragContext || ragContext.trim() === "") {
+            ragContext = await searchWeb(prompt);
+        }
+
+        // Step 2: LLM Call
+        sendEvent('status', { message: 'Drafting presentation content...', step: 4, totalSteps: 8 });
+        const { logGeneration } = require('./services/logger');
+        logGeneration(prompt, ragContext, blueprintSequence);
+
+        const { generateSlideContent } = require('./services/llmService');
+        const rawLLMOutput = await generateSlideContent(prompt, blueprintSequence, baseUrl, model, temperature, ragContext);
+        
+        sendEvent('status', { message: 'Validating and healing JSON output...', step: 5, totalSteps: 8 });
+        const { validateAndHeal } = require('./services/jsonHealer');
+        const validatedSlidesJson = await validateAndHeal(rawLLMOutput, baseUrl, model);
+        const validatedSlides = validatedSlidesJson.slides;
+
+        // Step 3: DSL Interpretation
+        sendEvent('status', { message: 'Parsing slides into layout DSL...', step: 6, totalSteps: 8 });
+        const { parseSlideToDSL } = require('./shared/layoutInterpreter');
+        const dslPresentation = validatedSlides.map(slide => 
+            parseSlideToDSL(slide)
+        );
+
+        // Step 4: Export Native PPTX
+        sendEvent('status', { message: 'Exporting to native PPTX format...', step: 7, totalSteps: 8 });
+        const { generatePPTX } = require('./services/pptxExporter');
+        const path = require('path');
+        const fileName = `deck_${Date.now()}.pptx`;
+        const exportPath = path.join(__dirname, 'public', 'exports', fileName);
+        
+        await generatePPTX(dslPresentation, theme, exportPath);
+
+        sendEvent('status', { message: 'Saving presentation history...', step: 8, totalSteps: 8 });
+        const dbId = db.savePresentation(validatedSlidesJson.title || "Untitled Presentation", validatedSlidesJson, theme.name);
+
+        // Step 5: Respond to Client
+        sendEvent('complete', {
+            success: true,
+            id: dbId,
+            downloadUrl: `/exports/${fileName}`,
+            slides: validatedSlides,
+            dslTree: dslPresentation,
+            themeUsed: theme
+        });
+
+        res.end();
+    } catch (error) {
+        console.error("Pipeline Stream Failure:", error);
+        sendEvent('error', { success: false, error: error.message });
+        res.end();
     }
 });
 

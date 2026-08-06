@@ -27,6 +27,13 @@ db.exec(`
     prompt TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  CREATE TABLE IF NOT EXISTS user_themes (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    theme_json TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 function savePresentation(title, slidesJson, theme) {
@@ -93,6 +100,22 @@ function getMediaById(id) {
     return item;
 }
 
+function saveTheme(themeObj) {
+    const stmt = db.prepare('INSERT OR REPLACE INTO user_themes (id, name, theme_json) VALUES (?, ?, ?)');
+    stmt.run(themeObj.id, themeObj.name, JSON.stringify(themeObj));
+    return themeObj.id;
+}
+
+function getThemes() {
+    const stmt = db.prepare('SELECT theme_json FROM user_themes ORDER BY created_at DESC');
+    return stmt.all().map(row => JSON.parse(row.theme_json));
+}
+
+function deleteTheme(id) {
+    const stmt = db.prepare('DELETE FROM user_themes WHERE id = ?');
+    stmt.run(id);
+}
+
 module.exports = {
     savePresentation,
     getPresentations,
@@ -102,5 +125,8 @@ module.exports = {
     duplicatePresentation,
     saveMedia,
     getMediaItems,
-    getMediaById
+    getMediaById,
+    saveTheme,
+    getThemes,
+    deleteTheme
 };

@@ -45,6 +45,8 @@ function App() {
   const [slidesJson, setSlidesJson] = useState(null);
   const [title, setTitle] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationStatus, setGenerationStatus] = useState("");
+  const [generationStep, setGenerationStep] = useState(0);
   const [error, setError] = useState(null);
   const [theme, setTheme] = useState('Modern Minimalist');
   const [templateType, setTemplateType] = useState('default');
@@ -86,26 +88,70 @@ function App() {
   const handleGenerateJson = async (formData) => {
     setIsGenerating(true);
     setError(null);
+    setGenerationStatus("Initializing...");
+    setGenerationStep(0);
     setTheme(formData.theme);
     setTemplateType(formData.templateType || 'default');
     setMasterTemplate(formData.masterTemplate || null);
     setCloudTemplateUrl(formData.cloudTemplateUrl || null);
     setSlideSize(formData.slideSize || 'LAYOUT_16x9');
+    
     try {
-      const response = await axios.post('http://localhost:3000/api/generate-json', {
-        ...formData,
-        baseUrl: settings.baseUrl,
-        model: formData.model || settings.model
+      const response = await fetch('http://localhost:3000/api/generate-json-stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formData,
+          baseUrl: settings.baseUrl,
+          model: formData.model || settings.model
+        })
       });
-      setSlidesJson(response.data.slides);
-      setTitle(response.data.title);
-      setTheme(response.data.theme || formData.theme);
-      setDbId(response.data.id);
-      setView('workspace');
+
+      if (!response.ok) throw new Error("Failed to connect to stream");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        
+        let currentEvent = null;
+        for (let i = 0; i < lines.length - 1; i++) {
+          const line = lines[i];
+          if (line.startsWith('event: ')) {
+            currentEvent = line.replace('event: ', '').trim();
+          } else if (line.startsWith('data: ')) {
+            const dataStr = line.replace('data: ', '').trim();
+            if (dataStr) {
+              const data = JSON.parse(dataStr);
+              if (currentEvent === 'status') {
+                setGenerationStatus(data.message);
+                if (data.step) setGenerationStep(data.step);
+              } else if (currentEvent === 'complete') {
+                setSlidesJson(data.slides || []);
+                setTitle(data.title);
+                setTheme(data.theme || formData.theme);
+                setDbId(data.id);
+                setView('workspace');
+              } else if (currentEvent === 'error') {
+                throw new Error(data.error);
+              }
+            }
+          }
+        }
+        buffer = lines[lines.length - 1];
+      }
     } catch (err) {
-      setError(err.response?.data?.error || err.message);
+      setError(err.message);
     } finally {
       setIsGenerating(false);
+      setGenerationStatus("");
+      setGenerationStep(0);
     }
   };
 
@@ -253,6 +299,23 @@ function App() {
         {error && (
             <div className="absolute top-4 right-4 z-50 bg-red-500/10 text-red-400 px-4 py-3 rounded-xl border border-red-500/20 shadow-2xl max-w-md">
                <p className="text-sm font-medium">{error}</p>
+            </div>
+        )}
+
+        {/* Live Progress Overlay */}
+        {isGenerating && generationStatus && (
+            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                <div className={`flex flex-col items-center p-8 rounded-2xl shadow-2xl ${darkMode ? 'bg-[#131b2e] border border-white/10' : 'bg-white border border-gray-200'}`}>
+                    <Loader2 className="w-12 h-12 text-violet-500 animate-spin mb-4" />
+                    <h3 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                        {generationStatus}
+                    </h3>
+                    {generationStep > 0 && (
+                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                            Step {generationStep} of 5
+                        </p>
+                    )}
+                </div>
             </div>
         )}
 
