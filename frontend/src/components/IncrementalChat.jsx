@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Send, Sparkles, Loader2 } from 'lucide-react';
 import axios from 'axios';
 
-export default function IncrementalChat({ slides, onAddSlide, baseUrl, model }) {
+export default function IncrementalChat({ slides, onAddSlide, contentConfig }) {
   const [instruction, setInstruction] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState(null);
@@ -31,8 +31,7 @@ export default function IncrementalChat({ slides, onAddSlide, baseUrl, model }) 
       const response = await axios.post('http://localhost:3000/api/generate-incremental', {
         contextText,
         instruction: prompt,
-        baseUrl,
-        model
+        contentConfig
       });
 
       if (response.data && response.data.slide) {

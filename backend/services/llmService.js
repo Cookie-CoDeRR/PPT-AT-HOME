@@ -242,8 +242,11 @@ The slide_type for each object MUST sequentially match this EXACT order:
 ${JSON.stringify(slideTypeBlueprint)}
 `;
 
+    const headers = { 'Content-Type': 'application/json' };
+    if (contentConfig.apiKey) headers['Authorization'] = `Bearer ${contentConfig.apiKey}`;
+
     const response = await axios.post(
-        baseUrl,
+        contentConfig.baseUrl,
         {
             model: modelName,
             messages: [
@@ -254,7 +257,8 @@ ${JSON.stringify(slideTypeBlueprint)}
             max_tokens: 800,
             stream: false,
             response_format: METADATA_SCHEMA
-        }
+        },
+        { headers }
     );
 
     const metadataSlides = parseApiResponse(response.data);
@@ -278,13 +282,13 @@ ${JSON.stringify(slideTypeBlueprint)}
 }
 
 // PASS 2: Write the content given the plan (SLIDE-BY-SLIDE ITERATION)
-async function writeSlideContent(userPrompt, blueprint, baseUrl, modelName, temperature, contextText) {
+async function writeSlideContent(userPrompt, blueprint, contentConfig, temperature, contextText) {
     console.log(`[Content Writer] Beginning iterative generation for ${blueprint.length} slides...`);
     const finalSlides = [];
 
     for (let idx = 0; idx < blueprint.length; idx++) {
         const plan = blueprint[idx];
-        console.log(`[Content Writer] ✍️ Generating slide ${idx + 1}/${blueprint.length} [${plan.slide_type}] using CONTENT MODEL: "${modelName}"...`);
+        console.log(`[Content Writer] ✍️ Generating slide ${idx + 1}/${blueprint.length} [${plan.slide_type}] using CONTENT MODEL: "${contentConfig.model}"...`);
 
         let finalPrompt = `Write the presentation content for SLIDE ${idx + 1}.`;
         if (contextText && contextText.trim() !== "") {
@@ -330,10 +334,13 @@ SLIDE TYPE INSTRUCTIONS:
 - For 'comparison' slides: fill 'title', 'left_box', and 'right_box'.
 - For 'standard_text' slides: fill 'title' and 'paragraphs'.`;
 
+        const headers = { 'Content-Type': 'application/json' };
+        if (contentConfig.apiKey) headers['Authorization'] = `Bearer ${contentConfig.apiKey}`;
+
         const response = await axios.post(
-            baseUrl,
+            contentConfig.baseUrl,
             {
-                model: modelName,
+                model: contentConfig.model,
                 messages: [
                     { role: "system", content: systemPrompt },
                     { role: "user", content: finalPrompt }
@@ -342,7 +349,8 @@ SLIDE TYPE INSTRUCTIONS:
                 max_tokens: 1024,
                 stream: false,
                 response_format: SINGLE_SLIDE_SCHEMA
-            }
+            },
+            { headers }
         );
 
         let rawOutput;
@@ -367,17 +375,22 @@ SLIDE TYPE INSTRUCTIONS:
 }
 
 // ORCHESTRATOR
-async function generateSlideContent(userPrompt, blueprint, baseUrl = null, modelName = null, temperature = 0.6, contextText = "") {
+async function generateSlideContent(userPrompt, blueprint, contentConfig = {}, temperature = 0.6, contextText = "") {
     try {
-        const finalBaseUrl = baseUrl || process.env.CONTENT_MODEL_URL || 'http://127.0.0.1:1234/v1/chat/completions';
-        const formattedBaseUrl = (finalBaseUrl.endsWith('/v1') || finalBaseUrl.endsWith('/api')) 
-            ? finalBaseUrl.replace(/\/$/, '') + '/chat/completions' 
-            : finalBaseUrl;
-        const finalModelName = modelName || process.env.CONTENT_MODEL_NAME || 'gemma-4-e4b';
+        let finalBaseUrl = contentConfig.baseUrl || process.env.CONTENT_MODEL_URL || 'http://127.0.0.1:1234/v1';
+        if (!finalBaseUrl.endsWith('/v1') && !finalBaseUrl.endsWith('/api') && !finalBaseUrl.includes('/chat/completions')) {
+            finalBaseUrl = finalBaseUrl.replace(/\/$/, '') + '/v1';
+        }
+        if (!finalBaseUrl.includes('/chat/completions')) {
+            finalBaseUrl = finalBaseUrl.replace(/\/$/, '') + '/chat/completions';
+        }
+        const finalModelName = contentConfig.model || process.env.CONTENT_MODEL_NAME || 'gemma-4-e4b';
+        
+        contentConfig = { ...contentConfig, baseUrl: finalBaseUrl, model: finalModelName };
 
-        console.log(`[Content Pipeline] Starting 1-pass iterative generation with ${finalModelName} at ${formattedBaseUrl}...`);
+        console.log(`[Content Pipeline] Starting 1-pass iterative generation with ${finalModelName} at ${finalBaseUrl}...`);
 
-        const finalSlides = await writeSlideContent(userPrompt, blueprint, formattedBaseUrl, finalModelName, temperature, contextText);
+        const finalSlides = await writeSlideContent(userPrompt, blueprint, contentConfig, temperature, contextText);
 
         return finalSlides;
     } catch (error) {
@@ -386,4 +399,56 @@ async function generateSlideContent(userPrompt, blueprint, baseUrl = null, model
     }
 }
 
-module.exports = { generateSlideContent, planSlideMetadata, writeSlideContent };
+
+async function generateIncrementalSlide(contextText, instruction, contentConfig = {}, contentType = 'presentation') {
+    let finalBaseUrl = contentConfig.baseUrl || process.env.CONTENT_MODEL_URL || 'http://127.0.0.1:1234/v1';
+    if (!finalBaseUrl.endsWith('/v1') && !finalBaseUrl.endsWith('/api') && !finalBaseUrl.includes('/chat/completions')) {
+        finalBaseUrl = finalBaseUrl.replace(/\/$/, '') + '/v1';
+    }
+    if (!finalBaseUrl.includes('/chat/completions')) {
+        finalBaseUrl = finalBaseUrl.replace(/\/$/, '') + '/chat/completions';
+    }
+    const finalModelName = contentConfig.model || process.env.CONTENT_MODEL_NAME || 'gemma-4-e4b';
+    
+    let finalPrompt = `Write ONE new presentation slide based on the following instruction: "${instruction}"\n\n`;
+    if (contextText && contextText.trim() !== "") {
+        finalPrompt += `Context Information (Use this to ground the presentation):\n${contextText}\n\n`;
+    }
+    
+    const systemPrompt = `You are an expert technical presentation writer.
+You MUST output exactly ONE slide matching the SINGLE_SLIDE_SCHEMA.
+Choose the most appropriate layout type from: title_hero, bento_grid, two_column_image, comparison, standard_text.`;
+
+    const headers = { 'Content-Type': 'application/json' };
+    if (contentConfig.apiKey) headers['Authorization'] = `Bearer ${contentConfig.apiKey}`;
+
+    const response = await axios.post(
+        finalBaseUrl,
+        {
+            model: finalModelName,
+            messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: finalPrompt }
+            ],
+            temperature: 0.6,
+            max_tokens: 1024,
+            stream: false,
+            response_format: SINGLE_SLIDE_SCHEMA
+        },
+        { headers }
+    );
+
+    let rawOutput;
+    if (response.data.choices && response.data.choices[0]?.message) {
+        rawOutput = response.data.choices[0].message.content;
+    } else {
+        rawOutput = JSON.stringify(response.data);
+    }
+
+    const objectMatch = rawOutput.match(/\{[\s\S]*\}/);
+    if (!objectMatch) throw new Error("No JSON object found in output");
+    
+    return JSON.parse(objectMatch[0]);
+}
+
+module.exports = { generateSlideContent, planSlideMetadata, writeSlideContent, generateIncrementalSlide };

@@ -13,21 +13,30 @@ import axios from 'axios';
 import { Presentation, Loader2, History, Settings, Sun, Moon } from 'lucide-react';
 
 function App() {
-  const [settings, setSettings] = useState({
-    baseUrl: 'http://127.0.0.1:1234/v1',
-    model: 'deepseek-coder-v2-lite-instruct-mlx',
+  const [settings, setSettings] = useState(() => {
+    const saved = localStorage.getItem('llmSettings');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    return {
+      layoutConfig: {
+        baseUrl: 'http://127.0.0.1:1234/v1',
+        apiKey: '',
+        model: 'qwen_layout_mlx',
+      },
+      contentConfig: {
+        baseUrl: 'http://127.0.0.1:1234/v1',
+        apiKey: '',
+        model: 'google/gemma-4-e4b',
+      }
+    };
   });
 
   useEffect(() => {
-    // Auto-discover LLM host (LM Studio)
-    axios.get('http://localhost:3000/api/discover')
-      .then(res => {
-        if (res.data.status === 'found') {
-          setSettings(prev => ({ ...prev, baseUrl: res.data.baseUrl }));
-        }
-      })
-      .catch(e => console.error("Discovery failed", e));
-  }, []);
+    localStorage.setItem('llmSettings', JSON.stringify(settings));
+  }, [settings]);
+
+
   
   // Navigation: 'home' | 'create-new' | 'create' | 'paste' | 'wizard' | 'template-pick' | 'import' | 'workspace'
   const [view, setView] = useState('home');
@@ -94,8 +103,8 @@ function App() {
     try {
       const response = await axios.post('http://localhost:3000/api/generate-json', {
         ...formData,
-        baseUrl: settings.baseUrl,
-        model: formData.model || settings.model
+        layoutConfig: settings.layoutConfig,
+        contentConfig: settings.contentConfig
       });
       setSlidesJson(response.data.slides);
       setTitle(response.data.title);
@@ -282,7 +291,8 @@ function App() {
                     darkMode={darkMode}
                     onGenerate={handleGenerateJson}
                     isGenerating={isGenerating}
-                    baseUrl={settings.baseUrl}
+                    layoutConfig={settings.layoutConfig}
+                    contentConfig={settings.contentConfig}
                     onBack={() => setView('create-new')}
                   />
               )}
@@ -343,7 +353,8 @@ function App() {
                     darkMode={darkMode}
                     onGenerate={handleGenerateJson}
                     isGenerating={isGenerating}
-                    baseUrl={settings.baseUrl}
+                    layoutConfig={settings.layoutConfig}
+                    contentConfig={settings.contentConfig}
                   />
               )}
             </div>
@@ -365,8 +376,7 @@ function App() {
               setCustomThemeSettings={setCustomThemeSettings}
               customBackground={customBackground}
               setCustomBackground={setCustomBackground}
-              baseUrl={settings.baseUrl}
-              model={settings.model}
+              contentConfig={settings.contentConfig}
             />
         )}
       </main>

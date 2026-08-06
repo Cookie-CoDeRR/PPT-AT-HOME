@@ -56,13 +56,18 @@ CRITICAL INSTRUCTIONS:
 - Do NOT put two identical, complex layouts (like two 'comparison' slides) back-to-back.
 - Do NOT write any content, roles, or priorities — just pick the layout order.`;
 
-async function getDetailedBlueprint(userPrompt, slideCount = 10) {
-    let url = process.env.ROUTER_MODEL_URL || 'http://127.0.0.1:1234/v1/chat/completions';
+async function getDetailedBlueprint(userPrompt, slideCount = 10, layoutConfig = {}) {
+    let url = layoutConfig.baseUrl || process.env.ROUTER_MODEL_URL || 'http://127.0.0.1:1234/v1';
+    if (!url.endsWith('/v1') && !url.endsWith('/api') && !url.includes('/chat/completions')) {
+        url = url.replace(/\/$/, '') + '/v1';
+    }
     if (!url.includes('/chat/completions')) {
         url = url.replace(/\/$/, '') + '/chat/completions';
     }
+    
     // We default to our new local fine-tuned model if not set
-    const modelName = process.env.ROUTER_MODEL_NAME || 'qwen_layout_mlx';
+    const modelName = layoutConfig.model || process.env.ROUTER_MODEL_NAME || 'qwen_layout_mlx';
+    const apiKey = layoutConfig.apiKey || 'local';
     
     const fallbackSequence = Array(slideCount).fill({ slide_type: "standard_text" });
     fallbackSequence[0] = { slide_type: "title_hero" };
@@ -86,13 +91,18 @@ async function getDetailedBlueprint(userPrompt, slideCount = 10) {
             ];
         }
 
+        const headers = { 'Content-Type': 'application/json' };
+        if (apiKey) {
+            headers['Authorization'] = `Bearer ${apiKey}`;
+        }
+
         const response = await axios.post(url, {
             model: modelName,
             messages: messages,
             temperature: 0.3, // Lower temp for 1.5B models to prevent infinite rambling
             max_tokens: 500,
             stream: false
-        });
+        }, { headers });
 
         let rawOutput;
         if (response.data.choices && response.data.choices[0]?.message) {

@@ -16,8 +16,8 @@ async function getDb() {
 }
 
 // Ensure base URL ends with /v1
-function normalizeBaseUrl(baseUrl) {
-    let finalBaseUrl = baseUrl || 'http://127.0.0.1:1234/v1';
+function normalizeBaseUrl(contentConfig) {
+    let finalBaseUrl = contentConfig.baseUrl || 'http://127.0.0.1:1234/v1';
     if (!finalBaseUrl.endsWith('/v1') && !finalBaseUrl.endsWith('/api')) {
         finalBaseUrl = finalBaseUrl.replace(/\/$/, '') + '/v1';
     }
@@ -25,9 +25,10 @@ function normalizeBaseUrl(baseUrl) {
 }
 
 // Generate embedding using local LLM
-async function createEmbedding(text, baseUrl, model = 'nomic-embed-text') {
-    const finalBaseUrl = normalizeBaseUrl(baseUrl);
-    const openai = new OpenAI({ baseURL: finalBaseUrl, apiKey: 'local' });
+async function createEmbedding(text, contentConfig, model = 'nomic-embed-text') {
+    const finalBaseUrl = normalizeBaseUrl(contentConfig);
+    const apiKey = contentConfig.apiKey || 'local';
+    const openai = new OpenAI({ baseURL: finalBaseUrl, apiKey: apiKey });
     
     try {
         const res = await openai.embeddings.create({
@@ -76,7 +77,7 @@ async function extractText(mimetype, buffer, originalname) {
 }
 
 // Process a file and store in LanceDB
-async function processAndStoreDocument(file, baseUrl) {
+async function processAndStoreDocument(file, contentConfig) {
     const text = await extractText(file.mimetype, file.buffer, file.originalname);
     const chunks = chunkText(text);
     
@@ -88,7 +89,7 @@ async function processAndStoreDocument(file, baseUrl) {
         // Only embed meaningful chunks
         if (chunk.trim().length < 10) continue;
         
-        const embedding = await createEmbedding(chunk, baseUrl);
+        const embedding = await createEmbedding(chunk, contentConfig);
         dataToInsert.push({
             id: `${file.originalname}-${i}-${Date.now()}`,
             vector: embedding,
@@ -117,14 +118,14 @@ async function processAndStoreDocument(file, baseUrl) {
 }
 
 // Retrieve relevant context
-async function searchContext(query, baseUrl, k = 3) {
+async function searchContext(query, contentConfig, k = 3) {
     try {
         const db = await getDb();
         const tables = await db.tableNames();
         if (!tables.includes(TABLE_NAME)) return ""; // No docs uploaded yet
         
         const table = await db.openTable(TABLE_NAME);
-        const queryEmbedding = await createEmbedding(query, baseUrl);
+        const queryEmbedding = await createEmbedding(query, contentConfig);
         
         const results = await table.search(queryEmbedding).limit(k).execute();
         
