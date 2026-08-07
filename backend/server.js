@@ -169,10 +169,11 @@ app.get('/api/discover', async (req, res) => {
 // Upload Context Endpoint
 app.post('/api/upload-context', upload.single('file'), async (req, res) => {
     try {
-        const { baseUrl } = req.body;
+        const { contentConfig } = req.body;
+        const config = typeof contentConfig === 'string' ? JSON.parse(contentConfig) : contentConfig;
         if (!req.file) return res.status(400).json({ error: "No file uploaded" });
         
-        const result = await processAndStoreDocument(req.file, baseUrl);
+        const result = await processAndStoreDocument(req.file, config);
         res.json(result);
     } catch (error) {
         console.error("Upload error:", error);
@@ -304,7 +305,11 @@ app.post('/api/media/graphic', async (req, res) => {
 // Generate JSON Slides Endpoint
 app.post('/api/generate-json', async (req, res) => {
     try {
+<<<<<<< HEAD
         const { prompt, slideCount, tone, baseUrl, model, useRag, useWebRag, theme, density, includeImages, referenceImage, temperature, contentType, language, slideSize, graphicStyle, graphicCount, graphicQuality, pasteMode, importType, importUrl } = req.body;
+=======
+        const { prompt, slideCount, tone, layoutConfig, contentConfig, useRag, useWebRag, theme, density, includeImages, referenceImage, temperature, contentType, language, slideSize, graphicStyle, graphicCount, graphicQuality } = req.body;
+>>>>>>> origin/main
         
         if (!prompt || !tone) {
             return res.status(400).json({ error: "Missing required parameters" });
@@ -319,7 +324,7 @@ app.post('/api/generate-json', async (req, res) => {
         // Run document RAG and web RAG concurrently (Web RAG is default now)
         let contextText = "";
         const [docContext, webContext] = await Promise.all([
-            useRag ? searchContext(prompt, baseUrl, 3) : Promise.resolve(""),
+            useRag ? searchContext(prompt, contentConfig, 3) : Promise.resolve(""),
             searchWeb(prompt) // Always fetch real-time news/context
         ]);
 
@@ -331,7 +336,7 @@ app.post('/api/generate-json', async (req, res) => {
 
         // Get blueprint from fine-tuned Router
         const { getDetailedBlueprint } = require('./services/blueprintService');
-        const blueprintSequence = await getDetailedBlueprint(prompt, slideCount || 1);
+        const blueprintSequence = await getDetailedBlueprint(prompt, slideCount || 1, layoutConfig);
 
         const { logGeneration } = require('./services/logger');
         logGeneration(prompt, webContext, blueprintSequence);
@@ -339,8 +344,7 @@ app.post('/api/generate-json', async (req, res) => {
         const slidesArray = await generateSlideContent(
             prompt, 
             blueprintSequence,
-            baseUrl,
-            model,
+            contentConfig,
             temperature || 0.6,
             contextText,
             { contentType, pasteMode }
@@ -453,7 +457,7 @@ app.post('/api/generate-json-stream', async (req, res) => {
 // Generate Incremental Slide Endpoint
 app.post('/api/generate-incremental', async (req, res) => {
     try {
-        const { contextText, instruction, baseUrl, model, contentType } = req.body;
+        const { contextText, instruction, contentConfig, contentType } = req.body;
         
         if (!contextText || !instruction) {
             return res.status(400).json({ error: "Missing context or instruction" });
@@ -464,8 +468,7 @@ app.post('/api/generate-incremental', async (req, res) => {
         const newSlide = await generateIncrementalSlide(
             contextText,
             instruction,
-            baseUrl,
-            model,
+            contentConfig,
             contentType || 'presentation'
         );
         
@@ -479,14 +482,14 @@ app.post('/api/generate-incremental', async (req, res) => {
 // Master Architecture Endpoint
 app.post('/api/generate-presentation', async (req, res) => {
     try {
-        const { prompt, slide_count, temperature, theme_id, baseUrl, model } = req.body;
+        const { prompt, slide_count, temperature, theme_id, layoutConfig, contentConfig } = req.body;
         
         const { THEMES } = require('./shared/themeEngine');
         const theme = THEMES[theme_id] || THEMES.dark_glass;
 
         // Step 1: Get Structural Blueprint from Fine-Tuned 1.5B Router
         const { getDetailedBlueprint } = require('./services/blueprintService');
-        const blueprintSequence = await getDetailedBlueprint(prompt, slide_count || 5);
+        const blueprintSequence = await getDetailedBlueprint(prompt, slide_count || 5, layoutConfig);
 
         // Fetch RAG Context (Document DB first, fallback to Web)
         const { searchContext, searchWeb } = require('./services/ragService');
@@ -500,10 +503,14 @@ app.post('/api/generate-presentation', async (req, res) => {
         logGeneration(prompt, ragContext, blueprintSequence);
 
         const { generateSlideContent } = require('./services/llmService');
+<<<<<<< HEAD
         const rawLLMOutput = await generateSlideContent(prompt, blueprintSequence, baseUrl, model, temperature, ragContext);
+=======
+        const rawLLMOutput = await generateSlideContent(prompt, blueprintSequence, contentConfig, temperature, webContext);
+>>>>>>> origin/main
         
         const { validateAndHeal } = require('./services/jsonHealer');
-        const validatedSlidesJson = await validateAndHeal(rawLLMOutput, baseUrl, model);
+        const validatedSlidesJson = await validateAndHeal(rawLLMOutput, contentConfig);
         const validatedSlides = validatedSlidesJson.slides;
 
         // Step 3: DSL Interpretation
@@ -884,3 +891,40 @@ app.get('/api/preview/:hash/:slideIndex', (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Backend server running on http://localhost:${PORT}`));
+
+// Headless External API Endpoint
+app.post('/api/v1/generate', async (req, res) => {
+    try {
+        const { prompt, slideCount, tone, layoutConfig, contentConfig, theme } = req.body;
+        
+        if (!prompt) {
+            return res.status(400).json({ error: "Missing required 'prompt' parameter" });
+        }
+
+        // 1. Get Blueprint
+        const { getDetailedBlueprint } = require('./services/blueprintService');
+        const blueprintSequence = await getDetailedBlueprint(prompt, slideCount || 10, layoutConfig);
+
+        // 2. Fetch Web Context
+        const { searchWeb } = require('./services/ragService');
+        const webContext = await searchWeb(prompt);
+
+        // 3. Generate Content
+        const { generateSlideContent } = require('./services/llmService');
+        const rawLLMOutput = await generateSlideContent(prompt, blueprintSequence, contentConfig, 0.6, webContext);
+        
+        // 4. Validate and Heal
+        const { validateAndHeal } = require('./services/jsonHealer');
+        const validatedSlidesJson = await validateAndHeal(rawLLMOutput, contentConfig);
+        const slidesJson = { title: prompt, slides: validatedSlidesJson.slides };
+
+        res.json({
+            status: "success",
+            title: prompt,
+            slides: slidesJson.slides
+        });
+    } catch (error) {
+        console.error("External API Generate Error:", error);
+        res.status(500).json({ error: error.message });
+    }
+});

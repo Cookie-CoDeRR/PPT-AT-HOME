@@ -4,7 +4,7 @@ import { PenTool, Palette, MessageSquare, Layers, FileText, Upload, X, Loader2, 
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function WizardForm({ onGenerate, isGenerating, baseUrl }) {
+export default function WizardForm({ onGenerate, isGenerating, contentConfig }) {
   const [step, setStep] = useState(1);
 
   // Form State
@@ -64,7 +64,7 @@ export default function WizardForm({ onGenerate, isGenerating, baseUrl }) {
 
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('baseUrl', baseUrl);
+    formData.append('contentConfig', JSON.stringify(contentConfig));
 
     try {
       const response = await axios.post('http://localhost:3000/api/upload-context', formData, {
@@ -78,7 +78,7 @@ export default function WizardForm({ onGenerate, isGenerating, baseUrl }) {
       setUploadMessage(err.response?.data?.error || err.message);
       setUseRag(false);
     }
-  }, [baseUrl]);
+  }, [contentConfig]);
 
   const onTemplateDrop = useCallback((acceptedFiles) => {
     const file = acceptedFiles[0];

@@ -1,63 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { Settings, Server, CheckCircle2, XCircle, Search, Key } from 'lucide-react';
 import axios from 'axios';
-import { Settings, Server, CheckCircle2, XCircle, Loader2, Search } from 'lucide-react';
 
 export default function SettingsPanel({ settings, onSettingsChange, darkMode = true }) {
-  const [status, setStatus] = useState('idle'); // idle, testing, connected, error, discovering
-  const [errorMsg, setErrorMsg] = useState('');
-  const [availableModels, setAvailableModels] = useState([]);
+  const [activeTab, setActiveTab] = useState('content'); // 'content' or 'layout'
 
-  useEffect(() => {
-    discoverServer();
-  }, []);
-
-  const discoverServer = async () => {
-    setStatus('discovering');
-    try {
-      const response = await axios.get('http://localhost:3000/api/discover');
-      if (response.data.status === 'found') {
-        const { baseUrl, models } = response.data;
-        setAvailableModels(models);
-        
-        const getId = (m) => m.id || m.name || (typeof m === 'string' ? m : '');
-        let newModel = settings.model;
-        if (!models.find(m => getId(m) === settings.model)) {
-          newModel = getId(models[0]);
-        }
-        
-        onSettingsChange({ baseUrl, model: newModel });
-        setStatus('connected');
-      } else {
-        setStatus('idle');
+  const handleConfigChange = (type, key, value) => {
+    onSettingsChange({
+      ...settings,
+      [type]: {
+        ...settings[type],
+        [key]: value
       }
-    } catch (err) {
-      setStatus('idle');
-    }
-  };
-
-  const testConnection = async () => {
-    setStatus('testing');
-    try {
-      const response = await axios.post('http://localhost:3000/api/models', {
-        baseUrl: settings.baseUrl
-      });
-      setStatus('connected');
-      if (response.data.models && response.data.models.length > 0) {
-        setAvailableModels(response.data.models);
-        
-        // Helper to extract string ID from model object
-        const getId = (m) => m.id || m.name || (typeof m === 'string' ? m : '');
-        
-        // Automatically select the first model if the current one isn't in the list
-        if (!response.data.models.find(m => getId(m) === settings.model)) {
-          onSettingsChange({ ...settings, model: getId(response.data.models[0]) });
-        }
-      }
-    } catch (err) {
-      setStatus('error');
-      setErrorMsg(err.response?.data?.error || err.message);
-      setAvailableModels([]);
-    }
+    });
   };
 
   const labelColor = darkMode ? 'text-gray-300' : 'text-gray-700';
@@ -65,99 +20,66 @@ export default function SettingsPanel({ settings, onSettingsChange, darkMode = t
   const inputStyle = darkMode
     ? 'bg-white/5 border border-white/10 text-white placeholder-gray-500 rounded-xl focus:border-violet-500/50'
     : 'bg-gray-50 border border-gray-200 text-gray-900 placeholder-gray-400 rounded-xl focus:border-violet-500';
-  const btnStyle = darkMode
-    ? 'bg-white/10 hover:bg-white/20 text-white border border-white/10'
-    : 'bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-200';
+  const tabActive = darkMode ? 'text-violet-400 border-b-2 border-violet-400 bg-white/5' : 'text-violet-600 border-b-2 border-violet-600 bg-violet-50';
+  const tabInactive = darkMode ? 'text-gray-500 hover:text-gray-300' : 'text-gray-600 hover:text-gray-900';
+
+  const renderConfig = (configType, config) => (
+    <div className="space-y-4 pt-4">
+      <div>
+        <label className={`block text-sm font-medium mb-1 ${labelColor}`}>Base URL</label>
+        <input 
+          type="text" 
+          className={`w-full px-4 py-2 text-sm outline-none transition-all ${inputStyle}`}
+          value={config.baseUrl || ''}
+          onChange={(e) => handleConfigChange(configType, 'baseUrl', e.target.value)}
+          placeholder="https://api.openai.com/v1"
+        />
+      </div>
+      <div>
+        <label className={`block text-sm font-medium mb-1 ${labelColor}`}>API Key (Optional for Local)</label>
+        <div className="relative">
+          <Key className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input 
+            type="password" 
+            className={`w-full pl-9 pr-4 py-2 text-sm outline-none transition-all ${inputStyle}`}
+            value={config.apiKey || ''}
+            onChange={(e) => handleConfigChange(configType, 'apiKey', e.target.value)}
+            placeholder="sk-..."
+          />
+        </div>
+      </div>
+      <div>
+        <label className={`block text-sm font-medium mb-1 ${labelColor}`}>Model Name</label>
+        <input 
+          type="text" 
+          className={`w-full px-4 py-2 text-sm outline-none transition-all ${inputStyle}`}
+          value={config.model || ''}
+          onChange={(e) => handleConfigChange(configType, 'model', e.target.value)}
+          placeholder={configType === 'layoutConfig' ? 'qwen_layout_mlx' : 'gpt-4o'}
+        />
+      </div>
+    </div>
+  );
 
   return (
     <div className="p-2">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <Settings className="w-5 h-5 text-violet-400" />
-          <h2 className={`text-lg font-bold ${headerColor}`}>Connection Settings</h2>
-        </div>
-        <button 
-          onClick={discoverServer}
-          title="Auto-discover local servers"
-          className="p-2 text-violet-500 hover:bg-violet-500/10 rounded-full transition-colors"
-        >
-          <Search className={`w-4 h-4 ${status === 'discovering' ? 'animate-spin' : ''}`} />
+      <div className="flex items-center gap-2 mb-4">
+        <Settings className="w-5 h-5 text-violet-400" />
+        <h2 className={`text-lg font-bold ${headerColor}`}>LLM Settings</h2>
+      </div>
+
+      <div className="flex border-b border-gray-200 dark:border-white/10">
+        <button onClick={() => setActiveTab('content')} className={`flex-1 py-2 text-sm font-bold transition-colors ${activeTab === 'content' ? tabActive : tabInactive}`}>
+          Main LLM
+        </button>
+        <button onClick={() => setActiveTab('layout')} className={`flex-1 py-2 text-sm font-bold transition-colors ${activeTab === 'layout' ? tabActive : tabInactive}`}>
+          Layout LLM
         </button>
       </div>
 
-      <div className="space-y-4">
-        <div>
-          <label className={`block text-sm font-medium mb-1 ${labelColor}`}>
-            Local API Base URL
-          </label>
-          <input 
-            type="text" 
-            className={`w-full px-4 py-2 text-sm outline-none transition-all ${inputStyle}`}
-            value={settings.baseUrl}
-            onChange={(e) => onSettingsChange({ ...settings, baseUrl: e.target.value })}
-            placeholder="http://127.0.0.1:1234/v1"
-          />
-          <p className="text-xs text-gray-400 mt-1">LM Studio: port 1234</p>
-        </div>
+      {activeTab === 'content' && renderConfig('contentConfig', settings.contentConfig || {})}
+      {activeTab === 'layout' && renderConfig('layoutConfig', settings.layoutConfig || {})}
 
-        <div>
-          <label className={`block text-sm font-medium mb-1 ${labelColor}`}>
-            Model Name
-          </label>
-          {availableModels.length > 0 ? (
-            <select 
-              className={`w-full px-4 py-2 text-sm outline-none appearance-none cursor-pointer transition-all ${inputStyle}`}
-              value={settings.model}
-              onChange={(e) => onSettingsChange({ ...settings, model: e.target.value })}
-            >
-              {availableModels.map((model, idx) => {
-                const modelId = model.id || model.name || (typeof model === 'string' ? model : `model-${idx}`);
-                return <option key={modelId} value={modelId} className={darkMode ? 'bg-[#131B2A] text-white' : 'bg-white text-gray-900'}>{modelId}</option>;
-              })}
-            </select>
-          ) : (
-            <input 
-              type="text" 
-              className={`w-full px-4 py-2 text-sm outline-none transition-all ${inputStyle}`}
-              value={settings.model}
-              onChange={(e) => onSettingsChange({ ...settings, model: e.target.value })}
-              placeholder="deepseek-coder-v2-lite-instruct-mlx"
-            />
-          )}
-        </div>
-
-        <button 
-          onClick={testConnection}
-          className={`w-full mt-2 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-medium transition-all ${btnStyle}`}
-        >
-          <Server className="w-4 h-4" />
-          Test Connection
-        </button>
-
-        {status === 'discovering' && (
-          <div className="flex items-center gap-2 text-blue-400 text-sm p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
-            <Loader2 className="w-4 h-4 animate-spin" /> Searching for local AI...
-          </div>
-        )}
-
-        {status === 'testing' && (
-          <div className="flex items-center gap-2 text-blue-400 text-sm p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
-            <Loader2 className="w-4 h-4 animate-spin" /> Testing connection...
-          </div>
-        )}
-        
-        {status === 'connected' && (
-          <div className="flex items-center gap-2 text-emerald-400 text-sm p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
-            <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> Connected to Local LLM
-          </div>
-        )}
-
-        {status === 'error' && (
-          <div className="flex items-center gap-2 text-red-400 text-sm p-3 bg-red-500/10 rounded-xl border border-red-500/20 break-all">
-            <XCircle className="w-4 h-4 flex-shrink-0" /> {errorMsg}
-          </div>
-        )}
-      </div>
     </div>
   );
 }

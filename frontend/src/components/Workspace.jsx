@@ -6,7 +6,7 @@ import PresentationMode from './PresentationMode';
 import { THEME_PRESETS } from '../config/themes';
 import IncrementalChat from './IncrementalChat';
 
-export default function Workspace({ darkMode = true, slides, setSlides, title, theme, setTheme, onExport, isExporting, slideSize, setSlideSize, customThemeSettings, setCustomThemeSettings, customBackground, setCustomBackground, baseUrl, model }) {
+export default function Workspace({ darkMode = true, slides, setSlides, title, theme, setTheme, onExport, isExporting, slideSize, setSlideSize, customThemeSettings, setCustomThemeSettings, customBackground, setCustomBackground, contentConfig }) {
   const [activeTab, setActiveTab] = useState('theme'); // 'theme' or 'settings'
   const [isPresenting, setIsPresenting] = useState(false);
   const [presentIndex, setPresentIndex] = useState(0);
@@ -185,8 +185,7 @@ export default function Workspace({ darkMode = true, slides, setSlides, title, t
           <IncrementalChat 
             slides={slides} 
             onAddSlide={(newSlide) => setSlides([...slides, newSlide])} 
-            baseUrl={baseUrl} 
-            model={model} 
+            contentConfig={contentConfig}  
           />
         </div>
       </div>
