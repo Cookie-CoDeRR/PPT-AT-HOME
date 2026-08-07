@@ -190,6 +190,29 @@ export default function CreationLauncher({ onGenerate, isGenerating, layoutConfi
     }
   }, [contentType]);
 
+  const [activeModel, setActiveModel] = useState(contentConfig?.model || 'google/gemma-4-e4b');
+  const [availableModels, setAvailableModels] = useState([contentConfig?.model || 'google/gemma-4-e4b']);
+  const [modelDropdown, setModelDropdown] = useState(false);
+
+  useEffect(() => {
+    const fetchModels = async () => {
+      try {
+        const response = await axios.post('http://localhost:3000/api/models', {
+          baseUrl: contentConfig?.baseUrl || 'http://127.0.0.1:1234/v1'
+        });
+        if (response.data.models?.length > 0) {
+          const fetched = response.data.models.map(m => m.name || m.id);
+          setAvailableModels(fetched);
+          if (!fetched.includes(activeModel)) setActiveModel(fetched[0]);
+        } else if (response.data.models?.length === 0) {
+          setAvailableModels(['⚠️ No Models Loaded']);
+          setActiveModel('⚠️ No Models Loaded');
+        }
+      } catch { /* silently fail */ }
+    };
+    fetchModels();
+  }, [contentConfig?.baseUrl]);
+
   const [uploadStatus, setUploadStatus] = useState('idle');
   const [uploadedFile, setUploadedFile] = useState(null);
   const [useRag, setUseRag] = useState(false);
