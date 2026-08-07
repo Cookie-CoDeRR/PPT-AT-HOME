@@ -415,6 +415,11 @@ app.post('/api/generate-json-stream', async (req, res) => {
         logGeneration(prompt, webContext, blueprintSequence);
 
         sendEvent('status', { message: 'Drafting slide content...', step: 3, totalSteps: 5 });
+        
+        const onSlideGenerated = (slide, idx, total) => {
+            sendEvent('slide', { slide, index: idx, total });
+        };
+
         const { generateSlideContent } = require('./services/llmService');
         const slidesArray = await generateSlideContent(
             prompt, 
@@ -422,7 +427,8 @@ app.post('/api/generate-json-stream', async (req, res) => {
             contentConfig || { baseUrl, model },
             temperature || 0.6,
             contextText,
-            { contentType, pasteMode }
+            { contentType, pasteMode },
+            onSlideGenerated
         );
         
         sendEvent('status', { message: 'Generating custom theme...', step: 4, totalSteps: 5 });
