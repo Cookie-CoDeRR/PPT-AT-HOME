@@ -8,17 +8,17 @@ import {
 // ─── Content Type Tabs ────────────────────────────────────────────────────────
 const CONTENT_TYPES = [
   { id: 'presentation', label: 'Presentation', icon: LayoutTemplate },
-  { id: 'webpage',      label: 'Webpage',       icon: Globe },
-  { id: 'document',     label: 'Document',       icon: FileText },
-  { id: 'social',       label: 'Social',         icon: Share2 },
-  { id: 'graphic',      label: 'Graphic',        icon: ImageIcon, badge: 'NEW' },
+  { id: 'webpage', label: 'Webpage', icon: Globe },
+  { id: 'document', label: 'Document', icon: FileText },
+  { id: 'social', label: 'Social', icon: Share2 },
+  { id: 'graphic', label: 'Graphic', icon: ImageIcon, badge: 'NEW' },
 ];
 
-const DOCUMENT_SIZES   = ['Default', 'A4', 'US Letter'];
-const LANGUAGES        = ['English (UK)', 'English (US)', 'Spanish', 'French', 'German', 'Hindi', 'Japanese', 'Chinese'];
-const SLIDE_COUNTS     = [5, 8, 10, 12, 15];
-const SECTION_COUNTS   = [3, 5, 7, 10];
-const ORIENTATIONS     = ['Landscape (16:9)', 'Portrait (9:16)', 'Square (1:1)'];
+const DOCUMENT_SIZES = ['Default', 'A4', 'US Letter'];
+const LANGUAGES = ['English (UK)', 'English (US)', 'Spanish', 'French', 'German', 'Hindi', 'Japanese', 'Chinese'];
+const SLIDE_COUNTS = [5, 8, 10, 12, 15];
+const SECTION_COUNTS = [3, 5, 7, 10];
+const ORIENTATIONS = ['Landscape (16:9)', 'Portrait (9:16)', 'Square (1:1)'];
 
 // ─── Generation Modes ─────────────────────────────────────────────────────────
 const GENERATION_MODES = [
@@ -72,10 +72,10 @@ export default function PasteTextLauncher({ onGenerate, isGenerating, onBack, da
 
   // Sub-option label and choices based on current contentType
   const getSubOptions = () => {
-    if (contentType === 'document')     return { label: 'Document size', options: DOCUMENT_SIZES, value: docSize,      onChange: setDocSize };
-    if (contentType === 'webpage')      return { label: 'Language',      options: LANGUAGES,       value: language,     onChange: setLanguage };
-    if (contentType === 'social')       return { label: 'Language',      options: LANGUAGES,       value: language,     onChange: setLanguage };
-    if (contentType === 'presentation') return { label: 'Orientation',   options: ORIENTATIONS,    value: orientation,  onChange: setOrientation };
+    if (contentType === 'document') return { label: 'Document size', options: DOCUMENT_SIZES, value: docSize, onChange: setDocSize };
+    if (contentType === 'webpage') return { label: 'Language', options: LANGUAGES, value: language, onChange: setLanguage };
+    if (contentType === 'social') return { label: 'Language', options: LANGUAGES, value: language, onChange: setLanguage };
+    if (contentType === 'presentation') return { label: 'Orientation', options: ORIENTATIONS, value: orientation, onChange: setOrientation };
     return null;
   };
   const subOpt = getSubOptions();
@@ -157,11 +157,10 @@ export default function PasteTextLauncher({ onGenerate, isGenerating, onBack, da
             <button
               key={ct.id}
               onClick={() => setContentType(ct.id)}
-              className={`relative flex flex-col items-center gap-1 px-4 py-2.5 rounded-xl border text-xs font-medium transition-all ${
-                isActive
-                  ? (darkMode ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-blue-600 border-blue-600 text-white shadow-sm')
-                  : (darkMode ? 'bg-white/4 border-white/10 text-gray-400 hover:bg-white/8 hover:text-white' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900 shadow-sm')
-              }`}
+              className={`relative flex flex-col items-center gap-1 px-4 py-2.5 rounded-xl border text-xs font-medium transition-all ${isActive
+                ? (darkMode ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-blue-600 border-blue-600 text-white shadow-sm')
+                : (darkMode ? 'bg-white/4 border-white/10 text-gray-400 hover:bg-white/8 hover:text-white' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900 shadow-sm')
+                }`}
             >
               {ct.badge && (
                 <span className="absolute -top-2 -right-1 px-1 py-0.5 bg-blue-500 text-[9px] font-bold text-white rounded-full leading-none">
@@ -188,7 +187,7 @@ export default function PasteTextLauncher({ onGenerate, isGenerating, onBack, da
           className="mb-6"
         >
           <div className="relative inline-flex items-center gap-2">
-            <span className="text-xs text-gray-400 mr-1">⇄</span>
+
             <select
               value={subOpt.value}
               onChange={e => subOpt.onChange(e.target.value)}
@@ -235,7 +234,7 @@ export default function PasteTextLauncher({ onGenerate, isGenerating, onBack, da
             </p>
             <p className="text-xs text-gray-400 mb-2">Example:</p>
             <pre className={`text-[11px] leading-relaxed whitespace-pre-wrap rounded-xl p-3 border font-sans ${darkMode ? 'bg-white/5 border-white/8 text-gray-400' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
-{SECTION_EXAMPLE}
+              {SECTION_EXAMPLE}
             </pre>
           </div>
         </div>
@@ -257,20 +256,17 @@ export default function PasteTextLauncher({ onGenerate, isGenerating, onBack, da
               <button
                 key={m.id}
                 onClick={() => setMode(m.id)}
-                className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl border text-left transition-all ${
-                  isSelected
-                    ? (darkMode ? 'border-blue-500/50 bg-blue-500/10' : 'border-blue-500 bg-blue-50/80 shadow-sm')
-                    : (darkMode ? 'border-white/8 bg-white/4 hover:border-white/20 hover:bg-white/8' : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50 shadow-sm')
-                }`}
+                className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl border text-left transition-all ${isSelected
+                  ? (darkMode ? 'border-blue-500/50 bg-blue-500/10' : 'border-blue-500 bg-blue-50/80 shadow-sm')
+                  : (darkMode ? 'border-white/8 bg-white/4 hover:border-white/20 hover:bg-white/8' : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50 shadow-sm')
+                  }`}
               >
-                <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
-                  isSelected ? 'border-blue-500' : 'border-gray-400'
-                }`}>
+                <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${isSelected ? 'border-blue-500' : 'border-gray-400'
+                  }`}>
                   {isSelected && <div className="w-2 h-2 rounded-full bg-blue-500" />}
                 </div>
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                  isSelected ? 'bg-blue-500/20' : (darkMode ? 'bg-white/5' : 'bg-gray-100')
-                }`}>
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-blue-500/20' : (darkMode ? 'bg-white/5' : 'bg-gray-100')
+                  }`}>
                   <Icon className={`w-4 h-4 ${isSelected ? 'text-blue-500' : 'text-gray-400'}`} />
                 </div>
                 <div>
