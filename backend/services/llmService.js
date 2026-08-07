@@ -316,11 +316,7 @@ ${JSON.stringify(slideTypeBlueprint)}
 }
 
 // PASS 2: Write the content given the plan (SLIDE-BY-SLIDE ITERATION)
-<<<<<<< HEAD
-async function writeSlideContent(userPrompt, blueprint, baseUrl, modelName, temperature, contextText, options = {}) {
-=======
-async function writeSlideContent(userPrompt, blueprint, contentConfig, temperature, contextText) {
->>>>>>> origin/main
+async function writeSlideContent(userPrompt, blueprint, contentConfig, temperature, contextText, options = {}) {
     console.log(`[Content Writer] Beginning iterative generation for ${blueprint.length} slides...`);
     const finalSlides = [];
     
@@ -416,14 +412,9 @@ SLIDE TYPE INSTRUCTIONS:
                 temperature: temperature,
                 max_tokens: 1024,
                 stream: false,
-<<<<<<< HEAD
                 response_format: getSchemaForSlideType(plan.slide_type)
-            }
-=======
-                response_format: SINGLE_SLIDE_SCHEMA
             },
             { headers }
->>>>>>> origin/main
         );
 
         let rawOutput;
@@ -448,11 +439,7 @@ SLIDE TYPE INSTRUCTIONS:
 }
 
 // ORCHESTRATOR
-<<<<<<< HEAD
-async function generateSlideContent(userPrompt, blueprint, baseUrl = null, modelName = null, temperature = 0.6, contextText = "", options = {}) {
-=======
-async function generateSlideContent(userPrompt, blueprint, contentConfig = {}, temperature = 0.6, contextText = "") {
->>>>>>> origin/main
+async function generateSlideContent(userPrompt, blueprint, contentConfig = {}, temperature = 0.6, contextText = "", options = {}) {
     try {
         let finalBaseUrl = contentConfig.baseUrl || process.env.CONTENT_MODEL_URL || 'http://127.0.0.1:1234/v1';
         if (!finalBaseUrl.endsWith('/v1') && !finalBaseUrl.endsWith('/api') && !finalBaseUrl.includes('/chat/completions')) {
@@ -467,11 +454,7 @@ async function generateSlideContent(userPrompt, blueprint, contentConfig = {}, t
 
         console.log(`[Content Pipeline] Starting 1-pass iterative generation with ${finalModelName} at ${finalBaseUrl}...`);
 
-<<<<<<< HEAD
-        const finalSlides = await writeSlideContent(userPrompt, blueprint, formattedBaseUrl, finalModelName, temperature, contextText, options);
-=======
-        const finalSlides = await writeSlideContent(userPrompt, blueprint, contentConfig, temperature, contextText);
->>>>>>> origin/main
+        const finalSlides = await writeSlideContent(userPrompt, blueprint, contentConfig, temperature, contextText, options);
 
         return finalSlides;
     } catch (error) {
@@ -479,28 +462,6 @@ async function generateSlideContent(userPrompt, blueprint, contentConfig = {}, t
         throw error;
     }
 }
-
-<<<<<<< HEAD
-async function generateIncrementalSlide(contextText, instruction, baseUrl, model, contentType = 'presentation') {
-    const finalBaseUrl = baseUrl || process.env.CONTENT_MODEL_URL || 'http://127.0.0.1:1234/v1/chat/completions';
-    const formattedBaseUrl = (finalBaseUrl.endsWith('/v1') || finalBaseUrl.endsWith('/api')) 
-        ? finalBaseUrl.replace(/\/$/, '') + '/chat/completions' 
-        : finalBaseUrl;
-    const finalModelName = model || process.env.CONTENT_MODEL_NAME || 'gemma-4-e4b';
-
-    let systemPrompt = `You are an expert technical presentation writer.
-You are adding or modifying a single slide based on user instruction.
-Output MUST be a valid JSON object matching the single slide schema.`;
-
-    if (contentType === 'webpage') systemPrompt += `\nNote: This is for a WEBPAGE. Act accordingly.`;
-    if (contentType === 'document') systemPrompt += `\nNote: This is for a DOCUMENT. Act accordingly.`;
-    if (contentType === 'social') systemPrompt += `\nNote: This is for a SOCIAL MEDIA POST. Act accordingly.`;
-
-    const userPrompt = `Existing slides context:\n${contextText}\n\nInstruction: ${instruction}\n\nGenerate the new slide JSON.`;
-
-    const response = await axios.post(
-        formattedBaseUrl,
-=======
 
 async function generateIncrementalSlide(contextText, instruction, contentConfig = {}, contentType = 'presentation') {
     let finalBaseUrl = contentConfig.baseUrl || process.env.CONTENT_MODEL_URL || 'http://127.0.0.1:1234/v1';
@@ -517,38 +478,32 @@ async function generateIncrementalSlide(contextText, instruction, contentConfig 
         finalPrompt += `Context Information (Use this to ground the presentation):\n${contextText}\n\n`;
     }
     
-    const systemPrompt = `You are an expert technical presentation writer.
+    let systemPrompt = `You are an expert technical presentation writer.
 You MUST output exactly ONE slide matching the SINGLE_SLIDE_SCHEMA.
 Choose the most appropriate layout type from: title_hero, bento_grid, two_column_image, comparison, standard_text.`;
+
+    if (contentType === 'webpage') systemPrompt += `\nNote: This is for a WEBPAGE. Act accordingly.`;
+    if (contentType === 'document') systemPrompt += `\nNote: This is for a DOCUMENT. Act accordingly.`;
+    if (contentType === 'social') systemPrompt += `\nNote: This is for a SOCIAL MEDIA POST. Act accordingly.`;
 
     const headers = { 'Content-Type': 'application/json' };
     if (contentConfig.apiKey) headers['Authorization'] = `Bearer ${contentConfig.apiKey}`;
 
     const response = await axios.post(
         finalBaseUrl,
->>>>>>> origin/main
         {
             model: finalModelName,
             messages: [
                 { role: "system", content: systemPrompt },
-<<<<<<< HEAD
-                { role: "user", content: userPrompt }
-=======
                 { role: "user", content: finalPrompt }
->>>>>>> origin/main
             ],
             temperature: 0.6,
             max_tokens: 1024,
             stream: false,
-<<<<<<< HEAD
             // Fallback to base schema if slide type is unknown during incremental add
             response_format: SINGLE_SLIDE_SCHEMA 
-        }
-=======
-            response_format: SINGLE_SLIDE_SCHEMA
         },
         { headers }
->>>>>>> origin/main
     );
 
     let rawOutput;

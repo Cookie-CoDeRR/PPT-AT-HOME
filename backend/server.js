@@ -305,11 +305,7 @@ app.post('/api/media/graphic', async (req, res) => {
 // Generate JSON Slides Endpoint
 app.post('/api/generate-json', async (req, res) => {
     try {
-<<<<<<< HEAD
-        const { prompt, slideCount, tone, baseUrl, model, useRag, useWebRag, theme, density, includeImages, referenceImage, temperature, contentType, language, slideSize, graphicStyle, graphicCount, graphicQuality, pasteMode, importType, importUrl } = req.body;
-=======
-        const { prompt, slideCount, tone, layoutConfig, contentConfig, useRag, useWebRag, theme, density, includeImages, referenceImage, temperature, contentType, language, slideSize, graphicStyle, graphicCount, graphicQuality } = req.body;
->>>>>>> origin/main
+        const { prompt, slideCount, tone, layoutConfig, contentConfig, baseUrl, model, useRag, useWebRag, theme, density, includeImages, referenceImage, temperature, contentType, language, slideSize, graphicStyle, graphicCount, graphicQuality, pasteMode, importType, importUrl } = req.body;
         
         if (!prompt || !tone) {
             return res.status(400).json({ error: "Missing required parameters" });
@@ -423,8 +419,7 @@ app.post('/api/generate-json-stream', async (req, res) => {
         const slidesArray = await generateSlideContent(
             prompt, 
             blueprintSequence,
-            baseUrl,
-            model,
+            contentConfig || { baseUrl, model },
             temperature || 0.6,
             contextText,
             { contentType, pasteMode }
@@ -503,11 +498,7 @@ app.post('/api/generate-presentation', async (req, res) => {
         logGeneration(prompt, ragContext, blueprintSequence);
 
         const { generateSlideContent } = require('./services/llmService');
-<<<<<<< HEAD
-        const rawLLMOutput = await generateSlideContent(prompt, blueprintSequence, baseUrl, model, temperature, ragContext);
-=======
-        const rawLLMOutput = await generateSlideContent(prompt, blueprintSequence, contentConfig, temperature, webContext);
->>>>>>> origin/main
+        const rawLLMOutput = await generateSlideContent(prompt, blueprintSequence, contentConfig || { baseUrl, model }, temperature, ragContext);
         
         const { validateAndHeal } = require('./services/jsonHealer');
         const validatedSlidesJson = await validateAndHeal(rawLLMOutput, contentConfig);
@@ -585,11 +576,11 @@ app.post('/api/generate-presentation-stream', async (req, res) => {
         logGeneration(prompt, ragContext, blueprintSequence);
 
         const { generateSlideContent } = require('./services/llmService');
-        const rawLLMOutput = await generateSlideContent(prompt, blueprintSequence, baseUrl, model, temperature, ragContext);
+        const rawLLMOutput = await generateSlideContent(prompt, blueprintSequence, contentConfig || { baseUrl, model }, temperature, ragContext);
         
         sendEvent('status', { message: 'Validating and healing JSON output...', step: 5, totalSteps: 8 });
         const { validateAndHeal } = require('./services/jsonHealer');
-        const validatedSlidesJson = await validateAndHeal(rawLLMOutput, baseUrl, model);
+        const validatedSlidesJson = await validateAndHeal(rawLLMOutput, contentConfig || { baseUrl, model });
         const validatedSlides = validatedSlidesJson.slides;
 
         // Step 3: DSL Interpretation
