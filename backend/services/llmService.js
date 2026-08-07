@@ -278,7 +278,7 @@ ${JSON.stringify(slideTypeBlueprint)}
 }
 
 // PASS 2: Write the content given the plan (SLIDE-BY-SLIDE ITERATION)
-async function writeSlideContent(userPrompt, blueprint, baseUrl, modelName, temperature, contextText) {
+async function writeSlideContent(userPrompt, blueprint, baseUrl, modelName, temperature, contextText, onSlideGenerated = null) {
     console.log(`[Content Writer] Beginning iterative generation for ${blueprint.length} slides...`);
     const finalSlides = [];
 
@@ -360,6 +360,14 @@ SLIDE TYPE INSTRUCTIONS:
         // Enforce the layout type
         slide.slide_type = plan.slide_type;
         finalSlides.push(slide);
+        
+        if (onSlideGenerated) {
+            try {
+                onSlideGenerated(slide, idx, blueprint.length);
+            } catch (err) {
+                console.error("Error in onSlideGenerated callback:", err);
+            }
+        }
     }
 
     console.log(`[Content Writer] Successfully wrote ${finalSlides.length} slides iteratively.`);
@@ -367,7 +375,7 @@ SLIDE TYPE INSTRUCTIONS:
 }
 
 // ORCHESTRATOR
-async function generateSlideContent(userPrompt, blueprint, baseUrl = null, modelName = null, temperature = 0.6, contextText = "") {
+async function generateSlideContent(userPrompt, blueprint, baseUrl = null, modelName = null, temperature = 0.6, contextText = "", onSlideGenerated = null) {
     try {
         const finalBaseUrl = baseUrl || process.env.CONTENT_MODEL_URL || 'http://127.0.0.1:1234/v1/chat/completions';
         const formattedBaseUrl = (finalBaseUrl.endsWith('/v1') || finalBaseUrl.endsWith('/api')) 
@@ -377,7 +385,7 @@ async function generateSlideContent(userPrompt, blueprint, baseUrl = null, model
 
         console.log(`[Content Pipeline] Starting 1-pass iterative generation with ${finalModelName} at ${formattedBaseUrl}...`);
 
-        const finalSlides = await writeSlideContent(userPrompt, blueprint, formattedBaseUrl, finalModelName, temperature, contextText);
+        const finalSlides = await writeSlideContent(userPrompt, blueprint, formattedBaseUrl, finalModelName, temperature, contextText, onSlideGenerated);
 
         return finalSlides;
     } catch (error) {

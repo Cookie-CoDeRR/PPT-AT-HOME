@@ -190,6 +190,71 @@ app.post('/api/generate-json', async (req, res) => {
     }
 });
 
+// Generate JSON Slides Stream Endpoint
+app.post('/api/generate-json-stream', async (req, res) => {
+    try {
+        const { prompt, slideCount, tone, baseUrl, model, useRag, useWebRag, theme, density, includeImages, referenceImage, temperature, contentType, language, slideSize, graphicStyle, graphicCount, graphicQuality, layoutConfig, contentConfig } = req.body;
+        
+        if (!prompt || !tone) {
+            return res.status(400).json({ error: "Missing required parameters" });
+        }
+
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.write(`data: ${JSON.stringify({ type: 'start' })}\n\n`);
+
+        let contextText = "";
+        const [docContext, webContext] = await Promise.all([
+            useRag ? searchContext(prompt, baseUrl, 3) : Promise.resolve(""),
+            searchWeb(prompt)
+        ]);
+
+        if (docContext) contextText += docContext;
+        if (webContext) {
+            contextText += (contextText ? '\n\n--- Web Search Context ---\n\n' : '') + webContext;
+        }
+
+        if (contentConfig || layoutConfig) {
+            contextText += '\n\n--- User Configurations ---\n';
+            if (contentConfig) contextText += `Content Configuration: ${JSON.stringify(contentConfig)}\n`;
+            if (layoutConfig) contextText += `Layout Configuration: ${JSON.stringify(layoutConfig)}\n`;
+        }
+
+        const { getDetailedBlueprint } = require('./services/blueprintService');
+        const blueprintSequence = await getDetailedBlueprint(prompt, slideCount || 1);
+
+        const { logGeneration } = require('./services/logger');
+        logGeneration(prompt, webContext, blueprintSequence);
+
+        const onSlideGenerated = (slide, idx, total) => {
+            res.write(`data: ${JSON.stringify({ type: 'slide', slide, index: idx, total })}\n\n`);
+        };
+
+        const { generateSlideContent } = require('./services/llmService');
+        const slidesArray = await generateSlideContent(
+            prompt, 
+            blueprintSequence,
+            baseUrl,
+            model,
+            temperature || 0.6,
+            contextText,
+            onSlideGenerated
+        );
+
+        const slidesJson = { title: prompt, slides: slidesArray };
+        const presTheme = theme || "Modern Minimalist";
+        const dbId = db.savePresentation(slidesJson.title || "Untitled Presentation", slidesJson, presTheme);
+
+        res.write(`data: ${JSON.stringify({ type: 'done', id: dbId, title: slidesJson.title })}\n\n`);
+        res.end();
+    } catch (error) {
+        console.error("Error generating JSON stream:", error);
+        res.write(`data: ${JSON.stringify({ type: 'error', error: error.message })}\n\n`);
+        res.end();
+    }
+});
+
 // Generate Incremental Slide Endpoint
 app.post('/api/generate-incremental', async (req, res) => {
     try {

@@ -91,18 +91,64 @@ function App() {
     setMasterTemplate(formData.masterTemplate || null);
     setCloudTemplateUrl(formData.cloudTemplateUrl || null);
     setSlideSize(formData.slideSize || 'LAYOUT_16x9');
+    
+    // Start with empty slides for the streaming UI
+    setSlidesJson([]);
+    setTitle(formData.prompt || "Generating Presentation..."); 
+
     try {
-      const response = await axios.post('http://localhost:3000/api/generate-json', {
-        ...formData,
-        baseUrl: settings.baseUrl,
-        model: formData.model || settings.model
+      const response = await fetch('http://localhost:3000/api/generate-json-stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formData,
+          baseUrl: settings.baseUrl,
+          model: formData.model || settings.model
+        })
       });
-      setSlidesJson(response.data.slides);
-      setTitle(response.data.title);
-      setDbId(response.data.id);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server responded with ${response.status}`);
+      }
+
+      // Transition to workspace immediately to show real-time slide additions
       setView('workspace');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let done = false;
+
+      while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        if (value) {
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const dataStr = line.replace('data: ', '').trim();
+              if (!dataStr) continue;
+              
+              try {
+                const data = JSON.parse(dataStr);
+                if (data.type === 'slide') {
+                  setSlidesJson(prev => [...prev, data.slide]);
+                } else if (data.type === 'done') {
+                  if (data.id) setDbId(data.id);
+                  if (data.title) setTitle(data.title);
+                } else if (data.type === 'error') {
+                  setError(data.error);
+                }
+              } catch (e) {
+                console.error("Error parsing stream chunk", e, dataStr);
+              }
+            }
+          }
+        }
+      }
     } catch (err) {
-      setError(err.response?.data?.error || err.message);
+      setError(err.message);
     } finally {
       setIsGenerating(false);
     }
