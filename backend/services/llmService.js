@@ -316,7 +316,7 @@ ${JSON.stringify(slideTypeBlueprint)}
 }
 
 // PASS 2: Write the content given the plan (SLIDE-BY-SLIDE ITERATION)
-async function writeSlideContent(userPrompt, blueprint, contentConfig, temperature, contextText, options = {}) {
+async function writeSlideContent(userPrompt, blueprint, contentConfig, temperature, contextText, options = {}, onSlideGenerated = null) {
     console.log(`[Content Writer] Beginning iterative generation for ${blueprint.length} slides...`);
     const finalSlides = [];
     
@@ -432,6 +432,14 @@ SLIDE TYPE INSTRUCTIONS:
         // Enforce the layout type
         slide.slide_type = plan.slide_type;
         finalSlides.push(slide);
+        
+        if (onSlideGenerated) {
+            try {
+                onSlideGenerated(slide, idx, blueprint.length);
+            } catch (err) {
+                console.error("Error in onSlideGenerated callback:", err);
+            }
+        }
     }
 
     console.log(`[Content Writer] Successfully wrote ${finalSlides.length} slides iteratively.`);
@@ -439,7 +447,7 @@ SLIDE TYPE INSTRUCTIONS:
 }
 
 // ORCHESTRATOR
-async function generateSlideContent(userPrompt, blueprint, contentConfig = {}, temperature = 0.6, contextText = "", options = {}) {
+async function generateSlideContent(userPrompt, blueprint, contentConfig = {}, temperature = 0.6, contextText = "", options = {}, onSlideGenerated = null) {
     try {
         let finalBaseUrl = contentConfig.baseUrl || process.env.CONTENT_MODEL_URL || 'http://127.0.0.1:1234/v1';
         if (!finalBaseUrl.endsWith('/v1') && !finalBaseUrl.endsWith('/api') && !finalBaseUrl.includes('/chat/completions')) {
@@ -454,7 +462,7 @@ async function generateSlideContent(userPrompt, blueprint, contentConfig = {}, t
 
         console.log(`[Content Pipeline] Starting 1-pass iterative generation with ${finalModelName} at ${finalBaseUrl}...`);
 
-        const finalSlides = await writeSlideContent(userPrompt, blueprint, contentConfig, temperature, contextText, options);
+        const finalSlides = await writeSlideContent(userPrompt, blueprint, contentConfig, temperature, contextText, options, onSlideGenerated);
 
         return finalSlides;
     } catch (error) {

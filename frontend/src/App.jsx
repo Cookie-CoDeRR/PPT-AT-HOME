@@ -106,21 +106,16 @@ function App() {
     setSlideSize(formData.slideSize || 'LAYOUT_16x9');
     
     try {
-<<<<<<< HEAD
       const response = await fetch('http://localhost:3000/api/generate-json-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
           baseUrl: settings.baseUrl,
-          model: formData.model || settings.model
+          model: formData.model || settings.model,
+          layoutConfig: settings.layoutConfig,
+          contentConfig: settings.contentConfig
         })
-=======
-      const response = await axios.post('http://localhost:3000/api/generate-json', {
-        ...formData,
-        layoutConfig: settings.layoutConfig,
-        contentConfig: settings.contentConfig
->>>>>>> origin/main
       });
 
       if (!response.ok) throw new Error("Failed to connect to stream");
@@ -149,11 +144,19 @@ function App() {
                 setGenerationStatus(data.message);
                 if (data.step) setGenerationStep(data.step);
               } else if (currentEvent === 'complete') {
-                setSlidesJson(data.slides || []);
-                setTitle(data.title);
-                setTheme(data.theme || formData.theme);
-                setDbId(data.id);
-                setView('workspace');
+                // Ignore complete if we already have the slides incrementally
+                if (data.id) setDbId(data.id);
+                if (data.title) setTitle(data.title);
+                if (data.theme) setTheme(data.theme);
+              } else if (currentEvent === 'slide') {
+                setSlidesJson(prev => {
+                   // Ensure we don't duplicate
+                   if (prev.find(s => s.title === data.slide.title && s.key_message === data.slide.key_message)) {
+                       return prev;
+                   }
+                   return [...prev, data.slide];
+                });
+                setView('workspace'); // Show workspace as soon as first slide arrives
               } else if (currentEvent === 'error') {
                 throw new Error(data.error);
               }
