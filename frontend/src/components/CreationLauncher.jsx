@@ -154,7 +154,7 @@ function PillDropdown({ label, value, options, onChange }) {
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 
-export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, onBack, darkMode = true }) {
+export default function CreationLauncher({ onGenerate, isGenerating, layoutConfig, contentConfig, onBack, darkMode = true }) {
   const [prompt, setPrompt] = useState('');
   const [contentType, setContentType] = useState('presentation');
   const [slideCount, setSlideCount] = useState(10);
@@ -190,31 +190,12 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
     }
   }, [contentType]);
 
-  const [activeModel, setActiveModel] = useState('deepseek-coder-v2-lite-instruct-mlx');
-  const [availableModels, setAvailableModels] = useState(['deepseek-coder-v2-lite-instruct-mlx']);
-  const [modelDropdown, setModelDropdown] = useState(false);
-
   const [uploadStatus, setUploadStatus] = useState('idle');
   const [uploadedFile, setUploadedFile] = useState(null);
   const [useRag, setUseRag] = useState(false);
   const [referenceImage, setReferenceImage] = useState(null);
 
-  useEffect(() => {
-    const fetchModels = async () => {
-      try {
-        const response = await axios.post('http://localhost:3000/api/models', { baseUrl });
-        if (response.data.models?.length > 0) {
-          const fetched = response.data.models.map(m => m.name || m.id);
-          setAvailableModels(fetched);
-          if (!fetched.includes(activeModel)) setActiveModel(fetched[0]);
-        } else if (response.data.models?.length === 0) {
-          setAvailableModels(['⚠️ No Models Loaded']);
-          setActiveModel('⚠️ No Models Loaded');
-        }
-      } catch { /* silently fail */ }
-    };
-    fetchModels();
-  }, [baseUrl]);
+
 
   const onRAGDrop = useCallback(async (acceptedFiles) => {
     const file = acceptedFiles[0];
@@ -223,7 +204,7 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
     setUploadStatus('uploading');
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('baseUrl', baseUrl);
+    formData.append('contentConfig', JSON.stringify(contentConfig));
     try {
       await axios.post('http://localhost:3000/api/upload-context', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
@@ -234,7 +215,7 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
       setUploadStatus('error');
       setUseRag(false);
     }
-  }, [baseUrl]);
+  }, [contentConfig]);
 
   const onImageDrop = useCallback((acceptedFiles) => {
     const file = acceptedFiles[0];
@@ -248,12 +229,12 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
   const { getRootProps: getImageProps, getInputProps: getImageInput } = useDropzone({ onDrop: onImageDrop, accept: { 'image/*': [] }, maxFiles: 1, noDrag: true });
 
   const handleSubmit = () => {
-    if (!prompt.trim() || isGenerating || activeModel === '⚠️ No Models Loaded') return;
+    if (!prompt.trim() || isGenerating) return;
     onGenerate({
       prompt,
       contentType,
-      slideCount,
-      tone,
+      slideCount: slideCount,
+      tone: tone,
       theme: theme === 'Classic' ? 'Modern Dark Tech' : theme,
       useRag,
       templateType: 'default',
@@ -366,11 +347,6 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
               onChange={v => setSlideCount(Number(v))}
             />
             <PillDropdown
-              value={theme}
-              options={THEMES}
-              onChange={setTheme}
-            />
-            <PillDropdown
               value={orientationLabel}
               options={ORIENTATIONS}
               onChange={setOrientation}
@@ -388,11 +364,6 @@ export default function CreationLauncher({ onGenerate, isGenerating, baseUrl, on
               value={slideCount}
               options={SLIDE_COUNTS}
               onChange={v => setSlideCount(Number(v))}
-            />
-            <PillDropdown
-              value={theme}
-              options={THEMES}
-              onChange={setTheme}
             />
             <PillDropdown
               value={orientationLabel}

@@ -1,14 +1,14 @@
 const OpenAI = require('openai');
 
-async function healSlide(slide, missingKeys, baseUrl, modelName) {
-    let finalBaseUrl = baseUrl || 'http://127.0.0.1:1234/v1';
+async function healSlide(slide, missingKeys, contentConfig = {}) {
+    let finalBaseUrl = contentConfig.baseUrl || 'http://127.0.0.1:1234/v1';
     if (!finalBaseUrl.endsWith('/v1') && !finalBaseUrl.endsWith('/api')) {
         finalBaseUrl = finalBaseUrl.replace(/\/$/, '') + '/v1';
     }
 
     const openai = new OpenAI({
         baseURL: finalBaseUrl,
-        apiKey: 'local',
+        apiKey: contentConfig.apiKey || 'local',
     });
 
     const prompt = `You are a strict JSON auto-healer. The following slide object of type "${slide.slide_type}" is missing the following required keys: ${missingKeys.join(', ')}.
@@ -20,7 +20,7 @@ ${JSON.stringify(slide, null, 2)}`;
 
     try {
         const response = await openai.chat.completions.create({
-            model: modelName || 'llama3.2',
+            model: contentConfig.model || 'llama3.2',
             messages: [{ role: 'user', content: prompt }],
             temperature: 0.3,
             max_tokens: 1500,
@@ -69,7 +69,7 @@ function injectFallbacks(slide, missingKeys) {
     return healed;
 }
 
-async function validateAndHeal(rawSlidesJson, baseUrl, modelName) {
+async function validateAndHeal(rawSlidesJson, contentConfig = {}) {
     const slides = rawSlidesJson.slides || [];
     const validatedSlides = [];
 
@@ -101,7 +101,7 @@ async function validateAndHeal(rawSlidesJson, baseUrl, modelName) {
             let healedSlide = null;
             let attempts = 0;
             while (attempts < 3 && !healedSlide) {
-                healedSlide = await healSlide(slide, missingKeys, baseUrl, modelName);
+                healedSlide = await healSlide(slide, missingKeys, contentConfig);
                 attempts++;
             }
 

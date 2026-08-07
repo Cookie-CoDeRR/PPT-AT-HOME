@@ -48,21 +48,27 @@ const BLUEPRINT_SCHEMA = {
 
 const qwenSystemPrompt = `You are a presentation layout planner. Given the user's topic, output a
 sequence choosing a slide_type for each slide. 
-Available types: ["title_hero", "bento_grid", "two_column_image", "comparison", "standard_text"].
+Available types: ["title_hero", "title_split", "bento_grid", "two_column_image", "comparison", "standard_text", "chart_pie", "data_table"].
 
 CRITICAL INSTRUCTIONS:
 - You MUST use a highly varied mix of slide types. A presentation with only 'standard_text' is extremely boring and unacceptable.
-- You MUST use at least one 'title_hero', one 'bento_grid', one 'two_column_image', and one 'comparison'.
+- You MUST use at least one 'title_hero' or 'title_split' for the opening slide.
+- You MUST use at least one 'bento_grid', one 'two_column_image', and one 'comparison'.
 - Do NOT put two identical, complex layouts (like two 'comparison' slides) back-to-back.
 - Do NOT write any content, roles, or priorities — just pick the layout order.`;
 
-async function getDetailedBlueprint(userPrompt, slideCount = 10) {
-    let url = process.env.ROUTER_MODEL_URL || 'http://127.0.0.1:1234/v1/chat/completions';
+async function getDetailedBlueprint(userPrompt, slideCount = 10, layoutConfig = {}) {
+    let url = layoutConfig.baseUrl || process.env.ROUTER_MODEL_URL || 'http://127.0.0.1:1234/v1';
+    if (!url.endsWith('/v1') && !url.endsWith('/api') && !url.includes('/chat/completions')) {
+        url = url.replace(/\/$/, '') + '/v1';
+    }
     if (!url.includes('/chat/completions')) {
         url = url.replace(/\/$/, '') + '/chat/completions';
     }
+    
     // We default to our new local fine-tuned model if not set
-    const modelName = process.env.ROUTER_MODEL_NAME || 'qwen_layout_mlx';
+    const modelName = layoutConfig.model || process.env.ROUTER_MODEL_NAME || 'qwen_layout_mlx';
+    const apiKey = layoutConfig.apiKey || 'local';
     
     const fallbackSequence = Array(slideCount).fill({ slide_type: "standard_text" });
     fallbackSequence[0] = { slide_type: "title_hero" };
@@ -74,7 +80,7 @@ async function getDetailedBlueprint(userPrompt, slideCount = 10) {
 
         // If it's our fine-tuned layout model, we use the exact Alpaca format it was trained on
         if (modelName.includes('qwen') || modelName.includes('layout')) {
-            const alpacaPrompt = `Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\nYou are a presentation layout planner. Given a slide count, generate a realistic layout sequence for a professional presentation.\n\n### Input:\nSlide count: ${slideCount}\n\n### Response:\n`;
+            const alpacaPrompt = `Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\nYou are a presentation layout planner. Given a slide count and topic, generate a realistic, highly varied layout sequence for a professional presentation.\n\n### Input:\nTopic: ${userPrompt}\nSlide count: ${slideCount}\n\n### Response:\n`;
             messages = [
                 { role: "user", content: alpacaPrompt }
             ];
@@ -86,13 +92,18 @@ async function getDetailedBlueprint(userPrompt, slideCount = 10) {
             ];
         }
 
+        const headers = { 'Content-Type': 'application/json' };
+        if (apiKey) {
+            headers['Authorization'] = `Bearer ${apiKey}`;
+        }
+
         const response = await axios.post(url, {
             model: modelName,
             messages: messages,
-            temperature: 0.3, // Lower temp for 1.5B models to prevent infinite rambling
+            temperature: 0.75, // Higher temp for more layout variety
             max_tokens: 500,
             stream: false
-        });
+        }, { headers });
 
         let rawOutput;
         if (response.data.choices && response.data.choices[0]?.message) {
@@ -142,7 +153,7 @@ async function getDetailedBlueprint(userPrompt, slideCount = 10) {
                 }
                 const blueprint = extracted.map(type => ({ slide_type: type }));
                 console.log(`[Blueprint Success] Extracted ${blueprint.length} slides from raw string parsing (Format 3).`);
-                return blueprint;
+                return enforceBlueprintRules(blueprint, slideCount);
             }
 
             throw new Error("No JSON object or array found, and markdown/string parsing failed.");
@@ -158,19 +169,60 @@ async function getDetailedBlueprint(userPrompt, slideCount = 10) {
 
         if (Array.isArray(blueprint) && blueprint.length > 0) {
             console.log(`[Blueprint Success] Predicted ${blueprint.length} detailed slide blueprint.`);
-            
-            // The pipeline expects just [{slide_type: ...}], which we now return directly
-            return blueprint;
+            return enforceBlueprintRules(blueprint, slideCount);
         }
         
         console.warn("[Blueprint Warning] Array empty or invalid. Using fallback.");
-        return fallbackSequence;
+        return enforceBlueprintRules(fallbackSequence, slideCount);
 
     } catch (error) {
         console.error("[Blueprint Error] Router model failed:", error.message);
         console.log("[Blueprint Fallback] Using fallback sequence.");
-        return fallbackSequence;
+        return enforceBlueprintRules(fallbackSequence, slideCount);
     }
+}
+
+function enforceBlueprintRules(blueprint, slideCount) {
+    if (!Array.isArray(blueprint) || blueprint.length === 0) return blueprint;
+    
+    // Ensure the array matches the requested slideCount exactly
+    if (slideCount && typeof slideCount === 'number') {
+        if (blueprint.length > slideCount) {
+            blueprint = blueprint.slice(0, slideCount);
+        }
+        const padTypes = ["bento_grid", "two_column_image", "comparison", "chart_pie", "chart_bar", "data_table", "standard_text"];
+        while (blueprint.length < slideCount) {
+            blueprint.push({ slide_type: padTypes[Math.floor(Math.random() * padTypes.length)] });
+        }
+    }
+
+    // Ensure ONLY the first slide is a title layout
+    if (blueprint[0].slide_type !== 'title_hero' && blueprint[0].slide_type !== 'title_split') {
+        blueprint[0].slide_type = 'title_hero';
+    }
+    
+    for (let i = 1; i < blueprint.length; i++) {
+        if (blueprint[i].slide_type === 'title_hero' || blueprint[i].slide_type === 'title_split') {
+            blueprint[i].slide_type = 'standard_text';
+        }
+    }
+
+    // Randomly swap the first title layout for visual variety
+    if (blueprint[0].slide_type === 'title_hero' && Math.random() > 0.5) {
+        blueprint[0].slide_type = 'title_split';
+    }
+    
+    const advancedTypes = ["bento_grid", "two_column_image", "comparison", "chart_pie", "chart_bar", "data_table", "standard_text"];
+    
+    // Prevent consecutive identical layouts (model repetition loop fix)
+    for (let i = 1; i < blueprint.length; i++) {
+        if (blueprint[i].slide_type === blueprint[i-1].slide_type) {
+            let available = advancedTypes.filter(t => t !== blueprint[i-1].slide_type);
+            blueprint[i].slide_type = available[Math.floor(Math.random() * available.length)];
+        }
+    }
+    
+    return blueprint;
 }
 
 module.exports = {

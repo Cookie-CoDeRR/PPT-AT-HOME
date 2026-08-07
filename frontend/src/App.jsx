@@ -13,21 +13,30 @@ import axios from 'axios';
 import { Presentation, Loader2, History, Settings, Sun, Moon } from 'lucide-react';
 
 function App() {
-  const [settings, setSettings] = useState({
-    baseUrl: 'http://127.0.0.1:1234/v1',
-    model: 'deepseek-coder-v2-lite-instruct-mlx',
+  const [settings, setSettings] = useState(() => {
+    const saved = localStorage.getItem('llmSettings');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    return {
+      layoutConfig: {
+        baseUrl: 'http://127.0.0.1:1234/v1',
+        apiKey: '',
+        model: 'qwen_layout_mlx',
+      },
+      contentConfig: {
+        baseUrl: 'http://127.0.0.1:1234/v1',
+        apiKey: '',
+        model: 'google/gemma-4-e4b',
+      }
+    };
   });
 
   useEffect(() => {
-    // Auto-discover LLM host (LM Studio)
-    axios.get('http://localhost:3000/api/discover')
-      .then(res => {
-        if (res.data.status === 'found') {
-          setSettings(prev => ({ ...prev, baseUrl: res.data.baseUrl }));
-        }
-      })
-      .catch(e => console.error("Discovery failed", e));
-  }, []);
+    localStorage.setItem('llmSettings', JSON.stringify(settings));
+  }, [settings]);
+
+
   
   // Navigation: 'home' | 'create-new' | 'create' | 'paste' | 'wizard' | 'template-pick' | 'import' | 'workspace'
   const [view, setView] = useState('home');
@@ -45,6 +54,8 @@ function App() {
   const [slidesJson, setSlidesJson] = useState(null);
   const [title, setTitle] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationStatus, setGenerationStatus] = useState("");
+  const [generationStep, setGenerationStep] = useState(0);
   const [error, setError] = useState(null);
   const [theme, setTheme] = useState('Modern Minimalist');
   const [templateType, setTemplateType] = useState('default');
@@ -86,17 +97,16 @@ function App() {
   const handleGenerateJson = async (formData) => {
     setIsGenerating(true);
     setError(null);
+    setGenerationStatus("Initializing...");
+    setGenerationStep(0);
     setTheme(formData.theme);
     setTemplateType(formData.templateType || 'default');
     setMasterTemplate(formData.masterTemplate || null);
     setCloudTemplateUrl(formData.cloudTemplateUrl || null);
     setSlideSize(formData.slideSize || 'LAYOUT_16x9');
     
-    // Start with empty slides for the streaming UI
-    setSlidesJson([]);
-    setTitle(formData.prompt || "Generating Presentation..."); 
-
     try {
+<<<<<<< HEAD
       const response = await fetch('http://localhost:3000/api/generate-json-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -105,59 +115,66 @@ function App() {
           baseUrl: settings.baseUrl,
           model: formData.model || settings.model
         })
+=======
+      const response = await axios.post('http://localhost:3000/api/generate-json', {
+        ...formData,
+        layoutConfig: settings.layoutConfig,
+        contentConfig: settings.contentConfig
+>>>>>>> origin/main
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Server responded with ${response.status}`);
-      }
-
-      // Transition to workspace immediately to show real-time slide additions
-      setView('workspace');
+      if (!response.ok) throw new Error("Failed to connect to stream");
 
       const reader = response.body.getReader();
-      const decoder = new TextDecoder('utf-8');
-      let done = false;
+      const decoder = new TextDecoder();
+      let buffer = "";
 
-      while (!done) {
-        const { value, done: readerDone } = await reader.read();
-        done = readerDone;
-        if (value) {
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const dataStr = line.replace('data: ', '').trim();
-              if (!dataStr) continue;
-              
-              try {
-                const data = JSON.parse(dataStr);
-                if (data.type === 'slide') {
-                  setSlidesJson(prev => [...prev, data.slide]);
-                } else if (data.type === 'done') {
-                  if (data.id) setDbId(data.id);
-                  if (data.title) setTitle(data.title);
-                } else if (data.type === 'error') {
-                  setError(data.error);
-                }
-              } catch (e) {
-                console.error("Error parsing stream chunk", e, dataStr);
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        
+        let currentEvent = null;
+        for (let i = 0; i < lines.length - 1; i++) {
+          const line = lines[i];
+          if (line.startsWith('event: ')) {
+            currentEvent = line.replace('event: ', '').trim();
+          } else if (line.startsWith('data: ')) {
+            const dataStr = line.replace('data: ', '').trim();
+            if (dataStr) {
+              const data = JSON.parse(dataStr);
+              if (currentEvent === 'status') {
+                setGenerationStatus(data.message);
+                if (data.step) setGenerationStep(data.step);
+              } else if (currentEvent === 'complete') {
+                setSlidesJson(data.slides || []);
+                setTitle(data.title);
+                setTheme(data.theme || formData.theme);
+                setDbId(data.id);
+                setView('workspace');
+              } else if (currentEvent === 'error') {
+                throw new Error(data.error);
               }
             }
           }
         }
+        buffer = lines[lines.length - 1];
       }
     } catch (err) {
       setError(err.message);
     } finally {
       setIsGenerating(false);
+      setGenerationStatus("");
+      setGenerationStep(0);
     }
   };
 
   const handleSelectHistory = (historyItem) => {
     setSlidesJson(historyItem.slides_json.slides || historyItem.slides_json);
     setTitle(historyItem.title);
-    setTheme(historyItem.theme);
+    setTheme(historyItem.slides_json?.theme || historyItem.theme);
     setDbId(historyItem.id);
     setTemplateType('default');
     setShowHistory(false);
@@ -301,12 +318,30 @@ function App() {
             </div>
         )}
 
+        {/* Live Progress Overlay */}
+        {isGenerating && generationStatus && (
+            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                <div className={`flex flex-col items-center p-8 rounded-2xl shadow-2xl ${darkMode ? 'bg-[#131b2e] border border-white/10' : 'bg-white border border-gray-200'}`}>
+                    <Loader2 className="w-12 h-12 text-violet-500 animate-spin mb-4" />
+                    <h3 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                        {generationStatus}
+                    </h3>
+                    {generationStep > 0 && (
+                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                            Step {generationStep} of 5
+                        </p>
+                    )}
+                </div>
+            </div>
+        )}
+
         {view === 'home' && (
             <HomePage
               darkMode={darkMode}
               onCreateNew={() => setView('create-new')}
               onSelectMode={handleSelectMode}
               onShowHistory={() => setShowHistory(true)}
+              onOpenDocument={(doc) => handleSelectHistory(doc)}
             />
         )}
 
@@ -328,7 +363,8 @@ function App() {
                     darkMode={darkMode}
                     onGenerate={handleGenerateJson}
                     isGenerating={isGenerating}
-                    baseUrl={settings.baseUrl}
+                    layoutConfig={settings.layoutConfig}
+                    contentConfig={settings.contentConfig}
                     onBack={() => setView('create-new')}
                   />
               )}
@@ -389,7 +425,8 @@ function App() {
                     darkMode={darkMode}
                     onGenerate={handleGenerateJson}
                     isGenerating={isGenerating}
-                    baseUrl={settings.baseUrl}
+                    layoutConfig={settings.layoutConfig}
+                    contentConfig={settings.contentConfig}
                   />
               )}
             </div>
@@ -411,8 +448,7 @@ function App() {
               setCustomThemeSettings={setCustomThemeSettings}
               customBackground={customBackground}
               setCustomBackground={setCustomBackground}
-              baseUrl={settings.baseUrl}
-              model={settings.model}
+              contentConfig={settings.contentConfig}
             />
         )}
       </main>

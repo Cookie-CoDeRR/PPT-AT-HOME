@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { Reorder, AnimatePresence, motion } from 'framer-motion';
-import { GripVertical, Plus, Edit3, Image as ImageIcon, Copy, Trash2, Palette, Settings, LayoutTemplate, Type, Loader2 } from 'lucide-react';
+import { GripVertical, Plus, Edit3, Image as ImageIcon, Copy, Trash2, Palette, Settings, LayoutTemplate, Type, Loader2, Play } from 'lucide-react';
 import SlideRenderer from './SlideRenderer';
+import PresentationMode from './PresentationMode';
 import { THEME_PRESETS } from '../config/themes';
 import IncrementalChat from './IncrementalChat';
 
-export default function Workspace({ darkMode = true, slides, setSlides, title, theme, setTheme, onExport, isExporting, slideSize, setSlideSize, customThemeSettings, setCustomThemeSettings, customBackground, setCustomBackground, baseUrl, model }) {
+export default function Workspace({ darkMode = true, slides, setSlides, title, theme, setTheme, onExport, isExporting, slideSize, setSlideSize, customThemeSettings, setCustomThemeSettings, customBackground, setCustomBackground, contentConfig }) {
   const [activeTab, setActiveTab] = useState('theme'); // 'theme' or 'settings'
+  const [isPresenting, setIsPresenting] = useState(false);
+  const [presentIndex, setPresentIndex] = useState(0);
 
   const panelBg = darkMode ? 'bg-white/5 backdrop-blur-xl border border-white/10' : 'bg-white border border-gray-200 shadow-xl';
   const textMuted = darkMode ? 'text-gray-400' : 'text-gray-500';
@@ -36,9 +39,12 @@ export default function Workspace({ darkMode = true, slides, setSlides, title, t
     return acc;
   }, {});
 
-  const activeThemeObj = theme === 'Custom' 
-    ? { bkgd: '#' + customThemeSettings.bkgd, textColor: '#' + customThemeSettings.textColor, accent: '#' + customThemeSettings.accent, titleColor: '#' + customThemeSettings.textColor, fontFace: customThemeSettings.fontFace, cssHeaderFont: customThemeSettings.fontFace, cssBodyFont: customThemeSettings.fontFace }
-    : (themes[theme] || themes['Modern Clean']);
+  // If theme is an object (dynamic), we map its properties to the expected format for the outer wrapper.
+  const activeThemeObj = typeof theme === 'object' 
+    ? { bkgd: '#' + theme.bg, textColor: '#' + theme.textPrimary, accent: '#' + theme.accent, titleColor: '#' + theme.accent, fontFace: theme.fontFace, cssHeaderFont: theme.fontFace, cssBodyFont: theme.bodyFontFace, shapeFill: '#' + theme.cardBg }
+    : (theme === 'Custom' 
+      ? { bkgd: '#' + customThemeSettings.bkgd, textColor: '#' + customThemeSettings.textColor, accent: '#' + customThemeSettings.accent, titleColor: '#' + customThemeSettings.textColor, fontFace: customThemeSettings.fontFace, cssHeaderFont: customThemeSettings.fontFace, cssBodyFont: customThemeSettings.fontFace, shapeFill: '#' + customThemeSettings.bkgd }
+      : (themes[theme] || themes['Modern Clean']));
 
 
   const handleReorder = (newOrder) => {
@@ -78,7 +84,7 @@ export default function Workspace({ darkMode = true, slides, setSlides, title, t
       
       {/* LEFT SIDEBAR: Navigation Outline */}
       <div className="w-64 flex-shrink-0 flex flex-col gap-4">
-        <div className={`p-4 flex-1 overflow-y-auto overflow-x-hidden flex flex-col custom-scrollbar rounded-2xl ${panelBg}`}>
+        <div className={`p-4 pb-10 flex-1 overflow-y-auto overflow-x-hidden flex flex-col custom-scrollbar rounded-2xl ${panelBg}`}>
           <h3 className={`text-xs font-bold uppercase tracking-wider mb-4 px-2 ${textMuted}`}>Outline</h3>
           
           <Reorder.Group axis="y" values={slides} onReorder={handleReorder} className="flex flex-col gap-2 flex-1">
@@ -87,6 +93,7 @@ export default function Workspace({ darkMode = true, slides, setSlides, title, t
                 key={slide.slide_number + slide.title + index} 
                 value={slide}
                 onClick={() => handleJumpToSlide(index)}
+                onDoubleClick={() => { setPresentIndex(index); setIsPresenting(true); }}
                 className={`group relative flex items-center gap-3 p-3 rounded-xl border cursor-grab active:cursor-grabbing transition-colors ${itemBg}`}
               >
                 <GripVertical className={`w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity absolute left-1 ${textMuted}`} />
@@ -161,7 +168,7 @@ export default function Workspace({ darkMode = true, slides, setSlides, title, t
                 )}
                 <div className="absolute top-0 left-0 w-full h-1 z-10" style={{ backgroundColor: activeThemeObj.accent }}></div>
                 <div className="relative z-10 w-full h-full">
-                  <SlideRenderer slide={slide} slideSize={slideSize} customBackground={customBackground} />
+                  <SlideRenderer slide={slide} slideSize={slideSize} customBackground={customBackground} theme={typeof theme === 'object' ? theme : null} />
                 </div>
               </div>
             </motion.div>
@@ -178,8 +185,7 @@ export default function Workspace({ darkMode = true, slides, setSlides, title, t
           <IncrementalChat 
             slides={slides} 
             onAddSlide={(newSlide) => setSlides([...slides, newSlide])} 
-            baseUrl={baseUrl} 
-            model={model} 
+            contentConfig={contentConfig}  
           />
         </div>
       </div>
@@ -203,7 +209,7 @@ export default function Workspace({ darkMode = true, slides, setSlides, title, t
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+          <div className="flex-1 overflow-y-auto p-4 pb-10 custom-scrollbar">
             {activeTab === 'theme' && (
               <div className="space-y-4">
                  <h4 className={`text-xs font-bold uppercase tracking-wider mb-2 ${textMuted}`}>Presets</h4>
@@ -381,6 +387,10 @@ export default function Workspace({ darkMode = true, slides, setSlides, title, t
 
             {activeTab === 'settings' && (
               <div className="space-y-4">
+                 <button onClick={() => { setPresentIndex(0); setIsPresenting(true); }} className={`w-full py-3 mb-2 rounded-xl font-bold transition-all shadow-lg hover:shadow-xl hover:scale-[1.02] flex items-center justify-center gap-2 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white border border-white/20`}>
+                   <Play className="w-4 h-4 fill-current"/> Present Fullscreen
+                 </button>
+                 <div className="w-full h-px bg-white/10 my-4"></div>
                  <button onClick={() => onExport('local')} disabled={isExporting} className={`w-full py-3 rounded-xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 ${actionBtnBg}`}>
                    {isExporting ? <Loader2 className="w-4 h-4 animate-spin"/> : null} Download PPTX
                  </button>
@@ -393,6 +403,17 @@ export default function Workspace({ darkMode = true, slides, setSlides, title, t
         </div>
       </div>
       
+      {/* Presentation Mode Overlay */}
+      {isPresenting && (
+        <PresentationMode 
+          slides={slides} 
+          startIndex={presentIndex} 
+          onClose={() => setIsPresenting(false)} 
+          slideSize={slideSize} 
+          customBackground={customBackground} 
+          theme={activeThemeObj} 
+        />
+      )}
     </div>
   );
 }

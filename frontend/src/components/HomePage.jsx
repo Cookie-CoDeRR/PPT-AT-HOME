@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import MediaLibrary from './MediaLibrary';
 import SearchModal from './SearchModal';
+import SlideRenderer from './SlideRenderer';
 
 // ─── Sidebar nav items ──────────────────────────────────────────────────────
 const SIDE_NAV = [
@@ -28,8 +29,11 @@ const FILTER_TABS = [
 ];
 
 // ─── Document Card ──────────────────────────────────────────────────────────
-function DocCard({ item, darkMode }) {
+function DocCard({ item, darkMode, onAction }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState(0);
+
   const date = item.created_at
     ? new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : 'Unknown date';
@@ -41,19 +45,71 @@ function DocCard({ item, darkMode }) {
   const menuBg  = darkMode ? 'bg-[#1E2A3B] border-white/10' : 'bg-white border-gray-200';
   const menuTxt = darkMode ? 'text-gray-300 hover:text-white hover:bg-white/5' : 'text-gray-700 hover:bg-gray-50';
 
+  const slides = item.slides_json?.slides || item.slides_json || [];
+  const presentationTheme = item.slides_json?.theme;
+
+  // Auto scroll logic on hover
+  useEffect(() => {
+    let interval;
+    if (isHovered && slides.length > 1) {
+      interval = setInterval(() => {
+        setPreviewIndex(prev => (prev + 1) % slides.length);
+      }, 1500);
+    } else if (!isHovered) {
+      setPreviewIndex(0);
+    }
+    return () => clearInterval(interval);
+  }, [isHovered, slides.length]);
+
   return (
     <motion.div
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       whileHover={{ y: -2 }}
       transition={{ duration: 0.15 }}
       className={`relative rounded-xl border overflow-hidden cursor-pointer transition-all duration-200 group ${cardBg}`}
     >
       {/* Thumbnail */}
       <div className={`aspect-[4/3] ${thumbBg} flex items-center justify-center relative overflow-hidden`}>
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500/30 to-fuchsia-500/30 flex items-center justify-center">
-          <Presentation className="w-7 h-7 text-violet-400/70" />
-        </div>
+        {slides.length > 0 ? (
+          <div className="absolute inset-0">
+            <div 
+              style={{ width: '800px', height: '600px', transform: 'scale(0.35)', transformOrigin: 'top left' }}
+              className="pointer-events-none"
+            >
+               <SlideRenderer slide={slides[previewIndex]} theme={presentationTheme} />
+            </div>
+            {/* Arrows when hovered */}
+            {slides.length > 1 && (
+              <div className="absolute bottom-2 left-0 right-0 flex justify-center items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-auto">
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setPreviewIndex(p => (p - 1 + slides.length) % slides.length); }}
+                  className="bg-black/60 text-white rounded-full p-1 hover:bg-black/90 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/></svg>
+                </button>
+                <div className="flex items-center gap-1.5">
+                  {slides.map((_, idx) => (
+                    <div key={idx} className={`h-1.5 w-1.5 rounded-full transition-colors duration-300 ${idx === previewIndex ? 'bg-white scale-125' : 'bg-white/40'}`} />
+                  ))}
+                </div>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setPreviewIndex(p => (p + 1) % slides.length); }}
+                  className="bg-black/60 text-white rounded-full p-1 hover:bg-black/90 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500/30 to-fuchsia-500/30 flex items-center justify-center pointer-events-none">
+            <Presentation className="w-7 h-7 text-violet-400/70" />
+          </div>
+        )}
+        
         {/* Hover star */}
-        <button className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded">
+        <button className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded z-20 pointer-events-auto">
           <Star className={`w-4 h-4 ${darkMode ? 'text-gray-500 hover:text-yellow-400' : 'text-gray-400 hover:text-yellow-500'}`} />
         </button>
       </div>
@@ -82,7 +138,7 @@ function DocCard({ item, darkMode }) {
                 className={`absolute bottom-8 right-0 z-30 rounded-xl border shadow-2xl py-1 min-w-[140px] text-sm ${menuBg}`}
               >
                 {['Open', 'Rename', 'Duplicate', 'Delete'].map(opt => (
-                  <button key={opt} onClick={() => setMenuOpen(false)}
+                  <button key={opt} onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onAction(opt, item); }}
                     className={`w-full text-left px-3 py-1.5 transition-colors ${menuTxt} ${opt === 'Delete' ? 'text-red-400' : ''}`}>
                     {opt}
                   </button>
@@ -97,8 +153,8 @@ function DocCard({ item, darkMode }) {
 }
 
 // ─── Main Component ──────────────────────────────────────────────────────────
-export default function HomePage({ onCreateNew, onSelectMode, onShowHistory, darkMode }) {
-  const [activeNav,    setActiveNav]    = useState('home');
+export default function HomePage({ onCreateNew, onSelectMode, onShowHistory, onOpenDocument, darkMode }) {
+  const [activeNav,    setActiveNav]    = useState('media');
   const [activeFilter, setActiveFilter] = useState('all');
   const [viewMode,     setViewMode]     = useState('grid');   // 'grid' | 'list'
   const [searchQuery,  setSearchQuery]  = useState('');
@@ -130,6 +186,31 @@ export default function HomePage({ onCreateNew, onSelectMode, onShowHistory, dar
   const filtered = docs.filter(d =>
     !searchQuery || (d.title || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleAction = async (opt, item) => {
+    try {
+      if (opt === 'Open') {
+        const res = await axios.get(`http://localhost:3000/api/history/${item.id}`);
+        if (onOpenDocument) onOpenDocument(res.data);
+      } else if (opt === 'Delete') {
+        if (!window.confirm('Are you sure you want to delete this?')) return;
+        await axios.delete(`http://localhost:3000/api/history/${item.id}`);
+        setDocs(docs.filter(d => d.id !== item.id));
+      } else if (opt === 'Rename') {
+        const newTitle = window.prompt('Enter new title:', item.title);
+        if (newTitle && newTitle.trim()) {
+          await axios.put(`http://localhost:3000/api/history/${item.id}`, { title: newTitle.trim() });
+          setDocs(docs.map(d => d.id === item.id ? { ...d, title: newTitle.trim() } : d));
+        }
+      } else if (opt === 'Duplicate') {
+        const res = await axios.post(`http://localhost:3000/api/history/${item.id}/duplicate`);
+        setDocs([res.data, ...docs]);
+      }
+    } catch (e) {
+      console.error(e);
+      window.alert('Action failed');
+    }
+  };
 
   // ── Theme tokens ──────────────────────────────────────────────────────────
   const sidebarBg  = darkMode ? 'bg-[#0D1117] border-white/5'  : 'bg-gray-50 border-gray-200';
@@ -395,7 +476,7 @@ export default function HomePage({ onCreateNew, onSelectMode, onShowHistory, dar
                   }
                 >
                   {filtered.map(doc => (
-                    <DocCard key={doc.id} item={doc} darkMode={darkMode} />
+                    <DocCard key={doc.id} item={doc} darkMode={darkMode} onAction={handleAction} />
                   ))}
                 </motion.div>
               )}

@@ -59,3 +59,12 @@ The frontend will typically run on `http://localhost:5173`. Open this URL in you
 2. **Setup Presentation**: Provide a detailed topic or instructions, choose your slide count, tone, and visual theme.
 3. **Generate**: Click "Generate Presentation Outline". The app will prompt your local LLM to create a structured JSON outline.
 4. **Review & Export**: Review the generated slides in the UI. If everything looks good, click "Export to PPTX" to download the compiled `.pptx` file.
+
+## Developer APIs & Integrations
+
+Want to build on top of PPT-AT-HOME or connect it to other apps? We offer a full headless programmatic API that lets you generate presentations directly via REST! 
+
+Check out the **[API Documentation](API_DOCUMENTATION.md)** for details on:
+- Configuring Cloud Providers (OpenAI, Groq, Anthropic, etc.)
+- Programmatically generating Presentations via `/api/v1/generate`
+- Streaming Content API and Blueprint generation 
