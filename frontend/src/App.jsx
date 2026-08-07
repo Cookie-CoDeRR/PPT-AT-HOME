@@ -39,7 +39,37 @@ function App() {
 
   
   // Navigation: 'home' | 'create-new' | 'create' | 'paste' | 'wizard' | 'template-pick' | 'import' | 'workspace'
-  const [view, setView] = useState('home');
+  const [viewHistory, setViewHistory] = useState(['home']);
+  const view = viewHistory[viewHistory.length - 1];
+
+  // Navigate forward, pushing to the history stack
+  const setView = (nextView) => {
+    setViewHistory(prev => [...prev, nextView]);
+  };
+
+  // Navigate back: pop the stack. If nothing left, go home.
+  const goBack = () => {
+    setViewHistory(prev => {
+      if (prev.length <= 1) return ['home'];
+      return prev.slice(0, -1);
+    });
+  };
+
+  // Use a ref so the popstate handler always calls the latest goBack
+  const goBackRef = React.useRef(goBack);
+  useEffect(() => { goBackRef.current = goBack; });
+
+  // Handle browser Back button by intercepting the popstate event
+  useEffect(() => {
+    const handlePopState = () => goBackRef.current();
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Push a dummy state every time view changes so browser Back button fires
+  useEffect(() => {
+    window.history.pushState({ view }, '', window.location.href);
+  }, [view]);
 
   // Universal dark/light mode (persisted in localStorage)
   const [darkMode, setDarkMode] = useState(() => {
@@ -275,16 +305,16 @@ function App() {
           ? 'border-white/5 bg-[#0B0F17]/80'
           : 'border-black/5 bg-white/80'
       }`}>
-        <div className="flex items-center gap-3 cursor-pointer" onClick={() => { setSlidesJson(null); setDbId(null); setView('home'); }}>
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => { setSlidesJson(null); setDbId(null); setViewHistory(['home']); }}>
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-500/20">
                <Presentation className="w-5 h-5 text-white" />
             </div>
             <h1 className={`text-xl font-bold tracking-tight ${darkMode ? 'text-white' : 'text-gray-900'}`}>Gamma<span className="text-violet-500">Clone</span></h1>
         </div>
         <div className="flex items-center gap-3">
-            {view !== 'home' && (
-                <button onClick={() => { setSlidesJson(null); setDbId(null); setView('home'); }} className={`text-sm font-medium transition-colors ${darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}>
-                    Home
+        {view !== 'home' && (
+                <button onClick={goBack} className={`text-sm font-medium transition-colors ${darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}>
+                    ← Back
                 </button>
             )}
             <button onClick={() => setShowHistory(true)} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
@@ -354,7 +384,7 @@ function App() {
                 darkMode={darkMode}
                 onSelectMode={handleSelectMode}
                 onShowHistory={() => setShowHistory(true)}
-                onBack={() => setView('home')}
+                onBack={goBack}
               />
             </div>
         )}
@@ -368,7 +398,7 @@ function App() {
                     isGenerating={isGenerating}
                     layoutConfig={settings.layoutConfig}
                     contentConfig={settings.contentConfig}
-                    onBack={() => setView('create-new')}
+                    onBack={goBack}
                   />
               )}
               {view === 'paste' && (
@@ -376,12 +406,12 @@ function App() {
                     darkMode={darkMode}
                     onGenerate={handleGenerateJson}
                     isGenerating={isGenerating}
-                    onBack={() => setView('create-new')}
+                    onBack={goBack}
                   />
               )}
               {view === 'template-pick' && (
                   <TemplatePicker
-                    onBack={() => setView('create-new')}
+                    onBack={goBack}
                     darkMode={darkMode}
                     onSelectTemplate={(template) => {
                       handleGenerateJson({
@@ -402,7 +432,7 @@ function App() {
               {view === 'import' && (
                   <ImportLauncher
                     darkMode={darkMode}
-                    onBack={() => setView('create-new')}
+                    onBack={goBack}
                     onPasteInText={() => setView('paste')}
                     onImport={(importData) => {
                       handleGenerateJson({
