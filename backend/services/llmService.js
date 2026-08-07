@@ -178,6 +178,40 @@ const SINGLE_SLIDE_SCHEMA = {
     }
 };
 
+function getSchemaForSlideType(slide_type) {
+    // Deep clone the base schema
+    const schema = JSON.parse(JSON.stringify(SINGLE_SLIDE_SCHEMA));
+    
+    // Enforce required fields dynamically based on the layout
+    const req = schema.json_schema.schema.required;
+    switch(slide_type) {
+        case 'title_hero':
+        case 'title_split':
+            req.push("subtitle");
+            break;
+        case 'bento_grid':
+            req.push("cards");
+            break;
+        case 'two_column_image':
+            req.push("left_content", "image_description");
+            break;
+        case 'comparison':
+            req.push("left_box", "right_box");
+            break;
+        case 'chart_pie':
+        case 'chart_bar':
+            req.push("chart_data");
+            break;
+        case 'data_table':
+            req.push("table_data");
+            break;
+        case 'standard_text':
+            req.push("paragraphs");
+            break;
+    }
+    return schema;
+}
+
 // Internal helper for robustly parsing diverse API output formats
 function parseApiResponse(responseData) {
     let rawOutput;
@@ -282,16 +316,44 @@ ${JSON.stringify(slideTypeBlueprint)}
 }
 
 // PASS 2: Write the content given the plan (SLIDE-BY-SLIDE ITERATION)
-async function writeSlideContent(userPrompt, blueprint, contentConfig, temperature, contextText) {
+async function writeSlideContent(userPrompt, blueprint, contentConfig, temperature, contextText, options = {}) {
     console.log(`[Content Writer] Beginning iterative generation for ${blueprint.length} slides...`);
     const finalSlides = [];
+    
+    let sourceChunks = [];
+    if (options.pasteMode && userPrompt.includes('———')) {
+        sourceChunks = userPrompt.split('———').map(c => c.trim()).filter(c => c.length > 0);
+    }
 
     for (let idx = 0; idx < blueprint.length; idx++) {
         const plan = blueprint[idx];
         console.log(`[Content Writer] ✍️ Generating slide ${idx + 1}/${blueprint.length} [${plan.slide_type}] using CONTENT MODEL: "${contentConfig.model}"...`);
 
         let finalPrompt = `Write the presentation content for SLIDE ${idx + 1}.`;
-        if (contextText && contextText.trim() !== "") {
+        
+        if (options.pasteMode) {
+             const mode = options.pasteMode;
+             let modeInstruction = "";
+             if (mode === 'generate_outline') modeInstruction = "Treat the user prompt as rough notes/bullets. EXPAND each section into full, polished slide content.";
+             else if (mode === 'summarize') modeInstruction = "CONDENSE the pasted content. Shorten long text, extract key ideas only.";
+             else if (mode === 'preserve') modeInstruction = "PRESERVE EXACT WORDING. Do NOT rephrase. Just structure it into slides exactly as written.";
+             finalPrompt += `\n\nPaste Mode Instructions: ${modeInstruction}`;
+             
+             if (sourceChunks.length > 0) {
+                 const chunk = sourceChunks[Math.min(idx, sourceChunks.length - 1)];
+                 finalPrompt += `\n\nSOURCE MATERIAL FOR THIS SLIDE ONLY:\n${chunk}`;
+             } else {
+                 finalPrompt += `\n\nSOURCE MATERIAL (Distribute across slides):\n${userPrompt}`;
+             }
+        }
+        
+        if (options.contentType) {
+             if (options.contentType === 'webpage') finalPrompt += `\n\nNote: This content is for a WEBPAGE. Format the output as a webpage section.`;
+             else if (options.contentType === 'document') finalPrompt += `\n\nNote: This content is for a DOCUMENT. Format the output as a document section (headings, paragraphs).`;
+             else if (options.contentType === 'social') finalPrompt += `\n\nNote: This content is for a SOCIAL MEDIA CAROUSEL. Keep it punchy, short, and highly visual.`;
+        }
+
+        if (!options.pasteMode && contextText && contextText.trim() !== "") {
             finalPrompt += `\n\nContext Information (Use this to ground the presentation):\n${contextText}`;
         }
         
@@ -328,10 +390,12 @@ PRIORITY DEPTH GUIDE:
 - Priority 3: Reference/Deep context. Denser text is allowed.
 
 SLIDE TYPE INSTRUCTIONS:
-- For 'title_hero' slides: fill 'title' and 'subtitle'.
+- For 'title_hero' or 'title_split' slides: fill 'title' and 'subtitle'.
 - For 'bento_grid' slides: fill 'title' and provide exactly 4 items in the 'cards' array.
 - For 'two_column_image' slides: fill 'title', 'left_content', and 'image_description'.
 - For 'comparison' slides: fill 'title', 'left_box', and 'right_box'.
+- For 'chart_pie' or 'chart_bar' slides: fill 'title' and provide 'chart_data' with 'labels' and 'values' arrays.
+- For 'data_table' slides: fill 'title' and provide 'table_data' with 'headers' and 'rows'.
 - For 'standard_text' slides: fill 'title' and 'paragraphs'.`;
 
         const headers = { 'Content-Type': 'application/json' };
@@ -348,7 +412,7 @@ SLIDE TYPE INSTRUCTIONS:
                 temperature: temperature,
                 max_tokens: 1024,
                 stream: false,
-                response_format: SINGLE_SLIDE_SCHEMA
+                response_format: getSchemaForSlideType(plan.slide_type)
             },
             { headers }
         );
@@ -375,7 +439,7 @@ SLIDE TYPE INSTRUCTIONS:
 }
 
 // ORCHESTRATOR
-async function generateSlideContent(userPrompt, blueprint, contentConfig = {}, temperature = 0.6, contextText = "") {
+async function generateSlideContent(userPrompt, blueprint, contentConfig = {}, temperature = 0.6, contextText = "", options = {}) {
     try {
         let finalBaseUrl = contentConfig.baseUrl || process.env.CONTENT_MODEL_URL || 'http://127.0.0.1:1234/v1';
         if (!finalBaseUrl.endsWith('/v1') && !finalBaseUrl.endsWith('/api') && !finalBaseUrl.includes('/chat/completions')) {
@@ -390,7 +454,7 @@ async function generateSlideContent(userPrompt, blueprint, contentConfig = {}, t
 
         console.log(`[Content Pipeline] Starting 1-pass iterative generation with ${finalModelName} at ${finalBaseUrl}...`);
 
-        const finalSlides = await writeSlideContent(userPrompt, blueprint, contentConfig, temperature, contextText);
+        const finalSlides = await writeSlideContent(userPrompt, blueprint, contentConfig, temperature, contextText, options);
 
         return finalSlides;
     } catch (error) {
@@ -398,7 +462,6 @@ async function generateSlideContent(userPrompt, blueprint, contentConfig = {}, t
         throw error;
     }
 }
-
 
 async function generateIncrementalSlide(contextText, instruction, contentConfig = {}, contentType = 'presentation') {
     let finalBaseUrl = contentConfig.baseUrl || process.env.CONTENT_MODEL_URL || 'http://127.0.0.1:1234/v1';
@@ -415,9 +478,13 @@ async function generateIncrementalSlide(contextText, instruction, contentConfig 
         finalPrompt += `Context Information (Use this to ground the presentation):\n${contextText}\n\n`;
     }
     
-    const systemPrompt = `You are an expert technical presentation writer.
+    let systemPrompt = `You are an expert technical presentation writer.
 You MUST output exactly ONE slide matching the SINGLE_SLIDE_SCHEMA.
 Choose the most appropriate layout type from: title_hero, bento_grid, two_column_image, comparison, standard_text.`;
+
+    if (contentType === 'webpage') systemPrompt += `\nNote: This is for a WEBPAGE. Act accordingly.`;
+    if (contentType === 'document') systemPrompt += `\nNote: This is for a DOCUMENT. Act accordingly.`;
+    if (contentType === 'social') systemPrompt += `\nNote: This is for a SOCIAL MEDIA POST. Act accordingly.`;
 
     const headers = { 'Content-Type': 'application/json' };
     if (contentConfig.apiKey) headers['Authorization'] = `Bearer ${contentConfig.apiKey}`;
@@ -433,7 +500,8 @@ Choose the most appropriate layout type from: title_hero, bento_grid, two_column
             temperature: 0.6,
             max_tokens: 1024,
             stream: false,
-            response_format: SINGLE_SLIDE_SCHEMA
+            // Fallback to base schema if slide type is unknown during incremental add
+            response_format: SINGLE_SLIDE_SCHEMA 
         },
         { headers }
     );
