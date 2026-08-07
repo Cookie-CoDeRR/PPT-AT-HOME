@@ -163,7 +163,7 @@ export default function HomePage({ onCreateNew, onSelectMode, onShowHistory, onO
   const [loading,      setLoading]      = useState(true);
   const [importOpen,   setImportOpen]   = useState(false);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
-  const [newGammaOpen,    setNewGammaOpen]    = useState(true); // Open by default as greeting page
+  const [newGammaOpen,    setNewGammaOpen]    = useState(false); // Only open on button click
 
   // Global hotkey for Cmd+K to open New Gamma Modal as requested
   useEffect(() => {
