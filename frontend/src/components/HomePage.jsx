@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import MediaLibrary from './MediaLibrary';
 import SearchModal from './SearchModal';
+import NewGammaModal from './NewGammaModal';
 import SlideRenderer from './SlideRenderer';
 
 // ─── Sidebar nav items ──────────────────────────────────────────────────────
@@ -162,13 +163,14 @@ export default function HomePage({ onCreateNew, onSelectMode, onShowHistory, onO
   const [loading,      setLoading]      = useState(true);
   const [importOpen,   setImportOpen]   = useState(false);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [newGammaOpen,    setNewGammaOpen]    = useState(true); // Open by default as greeting page
 
-  // Global hotkey for Cmd+K to open Search Modal
+  // Global hotkey for Cmd+K to open New Gamma Modal as requested
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        setSearchModalOpen(true);
+        setNewGammaOpen(true);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -269,7 +271,8 @@ export default function HomePage({ onCreateNew, onSelectMode, onShowHistory, onO
             <div className={`px-2 py-2 space-y-0.5 border-b ${divider}`}>
               <p className={`text-[10px] font-bold uppercase tracking-widest px-2 mb-1 ${mutedTxt}`}>Gammas</p>
               {[
-                { icon: Search,  label: 'Search ⌘K', onClick: () => setSearchModalOpen(true) },
+                { icon: Plus,    label: 'New Gamma ⌘K', onClick: () => setNewGammaOpen(true) },
+                { icon: Search,  label: 'Search', onClick: () => setSearchModalOpen(true) },
                 { icon: Users,   label: 'Shared with you' },
                 { icon: Globe,   label: 'Sites' },
                 { icon: Code2,   label: 'API Generated' },
@@ -371,8 +374,11 @@ export default function HomePage({ onCreateNew, onSelectMode, onShowHistory, onO
                 <span className="ml-1 px-1.5 py-0.5 bg-white/20 rounded-md text-[10px] font-bold tracking-wide">AI</span>
               </motion.button>
 
-              {/* New gamma dropdown (placeholder) */}
-              <button className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-colors ${darkMode ? 'border-white/10 text-gray-300 hover:bg-white/5' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
+              {/* New gamma dropdown */}
+              <button 
+                onClick={() => setNewGammaOpen(true)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-colors ${darkMode ? 'border-white/10 text-gray-300 hover:bg-white/5' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+              >
                 <Plus className="w-3.5 h-3.5" />
                 New gamma
                 <ChevronDown className="w-3.5 h-3.5 opacity-60" />
@@ -490,6 +496,16 @@ export default function HomePage({ onCreateNew, onSelectMode, onShowHistory, onO
         onClose={() => setSearchModalOpen(false)} 
         docs={docs} 
         darkMode={darkMode} 
+      />
+
+      <NewGammaModal 
+        isOpen={newGammaOpen}
+        onClose={() => setNewGammaOpen(false)}
+        darkMode={darkMode}
+        onSelectBlank={(layoutId, typeId) => {
+           // Transition seamlessly to create-new wizard
+           onCreateNew();
+        }}
       />
     </div>
   );
